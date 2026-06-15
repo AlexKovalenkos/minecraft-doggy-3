@@ -64,7 +64,7 @@ const World = {
         flat(-25, 20, 22);    // house
         flat(10, 10, 18);     // lake
         flat(30, 35, 18);     // stable
-        flat(42, 42, 30);     // castle — moved closer so player can find it
+        flat(0, 52, 28);      // castle cliff — directly ahead of spawn, 52 units away
         flat(-25+6, 20, 14);  // cat house area
         flat(-70, -65, 18);   // hamster house
         flat(12, -14, 12);    // NPC dog spawn
@@ -863,12 +863,18 @@ const World = {
         // Minecraft-style blocky mountains: bright grey stone + white snow cap
         // Stone tiers: base=dark grey, mid=medium grey, top=light grey, snow=white
         const mountains = [
-            { x: 60,  z: -60, height: 14, base: 10 },
-            { x: -45, z: -40, height: 16, base: 11 },
-            { x: -80, z: 60,  height: 12, base:  9 },
-            { x: -80, z: -20, height: 13, base: 10 },
-            { x: 55,  z: 50,  height: 10, base:  8 },
-            { x: -35, z: 65,  height: 11, base:  8 }
+            // Big dramatic peaks with snow
+            { x: -55, z: -50, height: 22, base: 13 }, // tallest
+            { x:  65, z: -55, height: 20, base: 12 },
+            { x: -70, z:  55, height: 18, base: 11 },
+            { x:  55, z:  65, height: 16, base: 10 },
+            { x: -80, z: -15, height: 19, base: 12 },
+            { x:  70, z: -20, height: 15, base:  9 },
+            // Medium peaks
+            { x: -40, z:  60, height: 13, base:  8 },
+            { x:  60, z:  40, height: 12, base:  8 },
+            { x: -55, z:  20, height: 14, base:  9 },
+            { x:  50, z: -70, height: 16, base: 10 },
         ];
 
         mountains.forEach(m => {
@@ -1265,48 +1271,286 @@ const World = {
         });
     },
 
-    // === PHASE 3: Castle (Disney-style) ===
+    // === PHASE 3: Castle on dramatic cliff ===
     _createCastle() {
-        // ── Disney-style MC castle on raised hill ──────────────────
-        const cx = 42, cz = 42; // moved from (85,80) → ~59 units from spawn, visible
-        const HILL_H = 10; // tall hill — visible from far away
+        // Castle sits on a 22-unit stone cliff DIRECTLY AHEAD of spawn (z=52)
+        // From spawn (0,0) looking forward (+Z) it's unmissable
+        const cx = 0, cz = 52;
+        const CLIFF_H = 22; // cliff height — towers above everything
 
-        // Build the hill — vivid MC green, tall pyramid
-        const hillMat  = new THREE.MeshStandardMaterial({ color: 0x5C9A2C }); // MC plains green
-        const hillMat2 = new THREE.MeshStandardMaterial({ color: 0x4A8020 }); // slightly darker mid
-        const hillMat3 = new THREE.MeshStandardMaterial({ color: 0x7A6040 }); // dirt sides
-        const hillLayers = [
-            { w: 44, h: 2.5, m: hillMat  },
-            { w: 34, h: 2.5, m: hillMat2 },
-            { w: 26, h: 2.5, m: hillMat  },
-            { w: 18, h: 2.5, m: hillMat2 },
+        // ── Stone cliff / spire ─────────────────────────────────────
+        const s1 = new THREE.MeshStandardMaterial({ color: 0x7A7A82 }); // dark stone base
+        const s2 = new THREE.MeshStandardMaterial({ color: 0x9A9AA4 }); // medium stone
+        const s3 = new THREE.MeshStandardMaterial({ color: 0xB4B4BC }); // light stone top
+        const dirtS = new THREE.MeshStandardMaterial({ color: 0x7A6040 });
+
+        // Multi-layer cliff — jagged natural spire
+        const cliffLayers = [
+            { w: 24, h: 4,  y: 0,  m: s1 },
+            { w: 20, h: 4,  y: 4,  m: s1 },
+            { w: 16, h: 4,  y: 8,  m: s2, jx:0.5 },
+            { w: 13, h: 3,  y: 12, m: s2, jx:-0.3 },
+            { w: 11, h: 3,  y: 15, m: s3 },
+            { w: 18, h: 2,  y: 18, m: s3 }, // wider top platform for castle
+            { w: 20, h: 2,  y: 20, m: s3 }, // castle base platform
         ];
-        let yOff = 0;
-        hillLayers.forEach(l => {
-            const hm = new THREE.Mesh(new THREE.BoxGeometry(l.w, l.h, l.w), l.m || hillMat);
-            hm.position.set(cx, yOff + l.h/2, cz);
-            hm.receiveShadow = true; hm.castShadow = true;
-            GAME.scene.add(hm);
-            // Collidable for each layer so player can climb
+        cliffLayers.forEach(l => {
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(l.w, l.h, l.w), l.m);
+            mesh.position.set(cx + (l.jx||0), l.y + l.h/2, cz);
+            mesh.castShadow = true; mesh.receiveShadow = true;
+            GAME.scene.add(mesh);
+            // Collidable
             this.collidables.push({ box: new THREE.Box3(
-                new THREE.Vector3(cx-l.w/2, yOff, cz-l.w/2),
-                new THREE.Vector3(cx+l.w/2, yOff+l.h, cz+l.w/2)
+                new THREE.Vector3(cx+(l.jx||0)-l.w/2, l.y, cz-l.w/2),
+                new THREE.Vector3(cx+(l.jx||0)+l.w/2, l.y+l.h, cz+l.w/2)
             )});
-            yOff += l.h;
         });
-        // yOff = 6 = HILL_H
 
-        // Stone cobble path up the hill (from south)
-        const pathMat = this._texStone
-            ? new THREE.MeshStandardMaterial({ map: this._texStone })
-            : new THREE.MeshStandardMaterial({ color: 0x888888 });
+        // ── Waterfall down the east face ─────────────────────────────
+        const wfMat = new THREE.MeshStandardMaterial({
+            color: 0x3FC8E8, transparent: true, opacity: 0.75,
+            emissive: 0x1A6888, emissiveIntensity: 0.2
+        });
         for (let i = 0; i < 10; i++) {
-            const seg = new THREE.Mesh(new THREE.BoxGeometry(3, 0.3, 3), pathMat);
-            seg.position.set(cx, i*0.6, cz + 18 - i*2.2);
-            seg.receiveShadow = true;
-            GAME.scene.add(seg);
+            const wy = CLIFF_H - i * 2.2;
+            const wf = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.4, 1.8), wfMat);
+            wf.position.set(cx + 10 + i * 0.15, wy, cz + i * 0.3);
+            GAME.scene.add(wf);
+            if (!this._waterfallSegs) this._waterfallSegs = [];
+            this._waterfallSegs.push(wf);
+        }
+        // Splash pool at base
+        const splashMat = new THREE.MeshStandardMaterial({
+            color: 0x3FC8E8, transparent: true, opacity: 0.6
+        });
+        const splash = new THREE.Mesh(new THREE.BoxGeometry(6, 0.4, 6), splashMat);
+        splash.position.set(cx + 11, 0.2, cz + 3);
+        GAME.scene.add(splash);
+        this.waterZones.push({ cx: cx+11, cz: cz+3, halfW: 3, halfD: 3 });
+
+        // ── Stone staircase up the south face ─────────────────────────
+        const stepMat = new THREE.MeshStandardMaterial({ color: 0x8A8A95 });
+        for (let i = 0; i < 11; i++) {
+            const step = new THREE.Mesh(new THREE.BoxGeometry(3.5, 2, 2.5), stepMat);
+            step.position.set(cx, i * 2 + 1, cz + 12 - i * 1.4);
+            step.receiveShadow = true; GAME.scene.add(step);
+            this.collidables.push({ box: new THREE.Box3(
+                new THREE.Vector3(cx-1.75, i*2, cz+12-i*1.4-1.25),
+                new THREE.Vector3(cx+1.75, i*2+2, cz+12-i*1.4+1.25)
+            )});
         }
 
+        // ── Snow patches on cliff top ─────────────────────────────────
+        const snowM = new THREE.MeshStandardMaterial({ color: 0xEEEEFF });
+        [[-3,0,2],[4,0,3],[-2,0,-3],[5,0,-2]].forEach(([sx,sy,sz]) => {
+            const sn = new THREE.Mesh(new THREE.BoxGeometry(3,0.4,3), snowM);
+            sn.position.set(cx+sx, CLIFF_H+sy+0.2, cz+sz); GAME.scene.add(sn);
+        });
+
+        // ── CASTLE GROUP at cliff top ──────────────────────────────────
+        const g = new THREE.Group();
+        const W = 22, H = 12, D = 18, wallT = 0.6;
+        const doorW = 4.5, doorH = 7;
+        const HILL_H = CLIFF_H; // alias for collidable math below
+
+        const hillLayers = []; // unused but needed for collision math ref
+        let yOff = CLIFF_H;    // castle base = cliff top
+
+        const goldMat   = new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0x443300, emissiveIntensity: 0.2 });
+        const pinkRoof  = new THREE.MeshStandardMaterial({ color: 0xff69b4 });
+        const blueRoof  = new THREE.MeshStandardMaterial({ color: 0x4488ff });
+        const purpRoof  = new THREE.MeshStandardMaterial({ color: 0x8844cc });
+        const redMat    = new THREE.MeshStandardMaterial({ color: 0xcc2222 });
+        const winMat    = new THREE.MeshStandardMaterial({ color: 0x88ccff, transparent: true, opacity: 0.6 });
+        const floorMat  = new THREE.MeshStandardMaterial({ color: 0xd4c8a0 });
+        const torchMat  = new THREE.MeshStandardMaterial({ color: 0xffcc44, emissive: 0xff8800, emissiveIntensity: 0.9 });
+        const wallMat   = new THREE.MeshStandardMaterial({ color: 0xF5EED8 }); // cream
+
+        const addTorch = (x, y, z) => {
+            const torch = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.5,0.2),
+                new THREE.MeshStandardMaterial({color:0x8B6040}));
+            torch.position.set(x,y,z); g.add(torch);
+            const flame = new THREE.Mesh(new THREE.BoxGeometry(0.18,0.22,0.18), torchMat);
+            flame.position.set(x,y+0.35,z); g.add(flame);
+            const light = new THREE.PointLight(0xff9940, 1.2, 6);
+            light.position.set(x,y+0.5,z); g.add(light);
+        };
+
+        // Floor
+        const floor = new THREE.Mesh(new THREE.BoxGeometry(W,0.2,D), floorMat);
+        floor.position.y = 0.1; floor.receiveShadow = true; g.add(floor);
+
+        // Walls
+        const bw = new THREE.Mesh(new THREE.BoxGeometry(W,H,wallT), wallMat);
+        bw.position.set(0,H/2,-D/2+wallT/2); bw.castShadow=true; g.add(bw);
+        [[-W/2+wallT/2,0],[W/2-wallT/2,0]].forEach(([x]) => {
+            const w = new THREE.Mesh(new THREE.BoxGeometry(wallT,H,D), wallMat);
+            w.position.set(x,H/2,0); w.castShadow=true; g.add(w);
+        });
+        const frontSideW = (W-doorW)/2;
+        const fL = new THREE.Mesh(new THREE.BoxGeometry(frontSideW,H,wallT), wallMat);
+        fL.position.set(-W/2+frontSideW/2,H/2,D/2-wallT/2); fL.castShadow=true; g.add(fL);
+        const fR = new THREE.Mesh(new THREE.BoxGeometry(frontSideW,H,wallT), wallMat);
+        fR.position.set(W/2-frontSideW/2,H/2,D/2-wallT/2); fR.castShadow=true; g.add(fR);
+        const fTop = new THREE.Mesh(new THREE.BoxGeometry(doorW,H-doorH,wallT), wallMat);
+        fTop.position.set(0,doorH+(H-doorH)/2,D/2-wallT/2); fTop.castShadow=true; g.add(fTop);
+
+        // Stained glass windows
+        const wColors=[0xff69b4,0xffd700,0x88ccff,0xff69b4];
+        [-D/3,D/3].forEach(zo => {
+            wColors.forEach((c,i) => {
+                const pm=new THREE.MeshStandardMaterial({color:c,transparent:true,opacity:0.55,emissive:c,emissiveIntensity:0.15});
+                [[-W/2+wallT/2],[W/2-wallT/2]].forEach(([xp]) => {
+                    const wp=new THREE.Mesh(new THREE.BoxGeometry(0.08,1.8,0.45),pm);
+                    wp.position.set(xp,H*0.55-0.6,zo+i*0.5-0.75); g.add(wp);
+                });
+            });
+        });
+
+        // 4 corner towers
+        const towerDefs=[
+            {x:-W/2,z:-D/2,roof:pinkRoof},{x:W/2,z:-D/2,roof:blueRoof},
+            {x:-W/2,z:D/2,roof:purpRoof},{x:W/2,z:D/2,roof:pinkRoof}
+        ];
+        towerDefs.forEach(td => {
+            const tower=new THREE.Mesh(new THREE.BoxGeometry(3.5,20,3.5),wallMat);
+            tower.position.set(td.x,10,td.z); tower.castShadow=true; g.add(tower);
+            for(let ci=0;ci<4;ci++){
+                const cr=new THREE.Mesh(new THREE.BoxGeometry(1,1.5,1),wallMat);
+                const a=ci*Math.PI/2;
+                cr.position.set(td.x+Math.cos(a)*1.2,21,td.z+Math.sin(a)*1.2); g.add(cr);
+            }
+            [3.2,2.5,1.8,1.2,0.6].forEach((s,i)=>{
+                const rl=new THREE.Mesh(new THREE.BoxGeometry(s,1.2,s),td.roof);
+                rl.position.set(td.x,21.5+i*1.2,td.z); rl.castShadow=true; g.add(rl);
+            });
+            const spire=new THREE.Mesh(new THREE.BoxGeometry(0.2,3,0.2),goldMat);
+            spire.position.set(td.x,28,td.z); g.add(spire);
+            const flag=new THREE.Mesh(new THREE.BoxGeometry(0.05,1.2,1.8),td.roof);
+            flag.position.set(td.x+0.9,30,td.z); g.add(flag);
+            addTorch(td.x,20.5,td.z);
+        });
+
+        // Main roof
+        [W+1,W-2,W-5].forEach((s,i)=>{
+            const rl=new THREE.Mesh(new THREE.BoxGeometry(s,1.2,D+1-i*1.5),blueRoof);
+            rl.position.set(0,H+0.6+i*1.2,0); rl.castShadow=true; g.add(rl);
+        });
+
+        // Banners
+        [-W/2+2,W/2-2].forEach(xo=>{
+            const ban=new THREE.Mesh(new THREE.BoxGeometry(0.1,5,2),pinkRoof);
+            ban.position.set(xo,H*0.6,D/2+0.5); g.add(ban);
+        });
+
+        // Entry steps
+        [[8,0.2,D/2+1.2],[7,0.5,D/2+2.4],[6,0.8,D/2+3.6]].forEach(([w,y,z])=>{
+            const step=new THREE.Mesh(new THREE.BoxGeometry(w,0.4,1.5),wallMat);
+            step.position.set(0,y,z); step.receiveShadow=true; g.add(step);
+        });
+
+        // Wall torches
+        [-D/3,0,D/3].forEach(zo=>{
+            addTorch(-W/2+0.5,H*0.45,zo);
+            addTorch(W/2-0.5,H*0.45,zo);
+        });
+        addTorch(0,H*0.45,-D/2+0.5);
+
+        // Interior
+        const carpet=new THREE.Mesh(new THREE.BoxGeometry(3,0.15,D-2),redMat);
+        carpet.position.set(0,0.15,0); g.add(carpet);
+
+        // Bookshelf
+        for(let i=-3;i<=3;i++){
+            const shelf=new THREE.Mesh(new THREE.BoxGeometry(1.5,2.5,0.6),
+                new THREE.MeshStandardMaterial({color:0x5a3a0a}));
+            shelf.position.set(i*2.2,1.25,-D/2+0.5); g.add(shelf);
+            [0xff69b4,0x4488ff,0xffdd00,0x44cc44].forEach((bc,bi)=>{
+                const book=new THREE.Mesh(new THREE.BoxGeometry(0.3,1.8,0.15),
+                    new THREE.MeshStandardMaterial({color:bc}));
+                book.position.set(i*2.2-0.45+bi*0.3,1.2,-D/2+0.55); g.add(book);
+            });
+        }
+
+        // Chandelier
+        const chanY=H-0.5;
+        const chanChain=new THREE.Mesh(new THREE.BoxGeometry(0.1,2,0.1),
+            new THREE.MeshStandardMaterial({color:0x666666}));
+        chanChain.position.set(0,chanY+1,0); g.add(chanChain);
+        const chanBar=new THREE.Mesh(new THREE.BoxGeometry(4,0.2,0.2),
+            new THREE.MeshStandardMaterial({color:0x666666}));
+        chanBar.position.set(0,chanY,0); g.add(chanBar);
+        [-1.5,0,1.5].forEach(xo=>{
+            const fl=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.3,0.15),torchMat);
+            fl.position.set(xo,chanY-0.2,0); g.add(fl);
+            const cl=new THREE.PointLight(0xffcc44,0.8,8);
+            cl.position.set(xo,chanY-0.1,0); g.add(cl);
+        });
+
+        // Dance floor
+        const danceColors=[0xff69b4,0xffd700,0x4488ff,0x44cc44,0xff8800,0xcc44ff];
+        this._danceTiles=[];
+        for(let di=-2;di<=2;di++) for(let dj=-2;dj<=2;dj++){
+            const col=danceColors[((di+2)+(dj+2)*5)%danceColors.length];
+            const tileMat=new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:0.05});
+            const tile=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.15,1.8),tileMat);
+            tile.position.set(di*2,0.15,D/4+dj*2);
+            g.add(tile);
+            this._danceTiles.push({mesh:tile,mat:tileMat,bx:cx+di*2,bz:cz+CLIFF_H+D/4+dj*2});
+        }
+
+        // Portal
+        const portalMat=new THREE.MeshStandardMaterial({
+            color:0x8844cc,emissive:0x6622aa,emissiveIntensity:0.8,transparent:true,opacity:0.85
+        });
+        [[0,3,0],[0,-3,0],[2.5,0,0],[-2.5,0,0]].forEach(([px,py,pz])=>{
+            const fr=new THREE.Mesh(new THREE.BoxGeometry(
+                Math.abs(px)>0?0.4:5,Math.abs(py)>0?0.4:6.2,0.4
+            ),new THREE.MeshStandardMaterial({color:0x4a2080,emissive:0x220840,emissiveIntensity:0.5}));
+            fr.position.set(px,py+3,-D/2+3); g.add(fr);
+        });
+        const portalFill=new THREE.Mesh(new THREE.BoxGeometry(4.5,5.5,0.15),portalMat);
+        portalFill.position.set(0,3,-D/2+3); g.add(portalFill);
+        const portalLight=new THREE.PointLight(0x8844cc,1.5,10);
+        portalLight.position.set(0,3,-D/2+3); g.add(portalLight);
+        this.portalPos={x:cx,y:0,z:cz+CLIFF_H-D/2+3};
+
+        // Throne
+        const throneZ=D/4;
+        const throneStep=new THREE.Mesh(new THREE.BoxGeometry(6,0.4,4),wallMat);
+        throneStep.position.set(0,0.2,throneZ); g.add(throneStep);
+        const seat=new THREE.Mesh(new THREE.BoxGeometry(2.5,0.5,2.5),goldMat);
+        seat.position.set(0,0.7,throneZ); g.add(seat);
+        const cushion=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.35,2.2),redMat);
+        cushion.position.set(0,1.1,throneZ); g.add(cushion);
+        const throneBack2=new THREE.Mesh(new THREE.BoxGeometry(2.5,4,0.4),goldMat);
+        throneBack2.position.set(0,3,throneZ-1.2); throneBack2.castShadow=true; g.add(throneBack2);
+        [-1.2,0,1.2].forEach(xo=>{
+            const prong=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.6,0.2),goldMat);
+            prong.position.set(xo,5.3,throneZ-1.2); g.add(prong);
+        });
+        const crownLight=new THREE.PointLight(0xffd700,0.6,5);
+        crownLight.position.set(0,5,throneZ-1); g.add(crownLight);
+
+        // Place group on top of cliff
+        g.position.set(cx, CLIFF_H, cz);
+        GAME.scene.add(g);
+
+        // Collisions — walls (offset by cliff height)
+        const ch=CLIFF_H;
+        this.collidables.push({box:new THREE.Box3(new THREE.Vector3(cx-W/2,ch,cz-D/2),new THREE.Vector3(cx+W/2,ch+H,cz-D/2+wallT))});
+        this.collidables.push({box:new THREE.Box3(new THREE.Vector3(cx-W/2,ch,cz-D/2),new THREE.Vector3(cx-W/2+wallT,ch+H,cz+D/2))});
+        this.collidables.push({box:new THREE.Box3(new THREE.Vector3(cx+W/2-wallT,ch,cz-D/2),new THREE.Vector3(cx+W/2,ch+H,cz+D/2))});
+        this.collidables.push({box:new THREE.Box3(new THREE.Vector3(cx-W/2,ch,cz+D/2-wallT),new THREE.Vector3(cx-W/2+frontSideW,ch+H,cz+D/2))});
+        this.collidables.push({box:new THREE.Box3(new THREE.Vector3(cx+W/2-frontSideW,ch,cz+D/2-wallT),new THREE.Vector3(cx+W/2,ch+H,cz+D/2))});
+        this.collidables.push({box:new THREE.Box3(new THREE.Vector3(cx-1.5,ch,cz+throneZ-2),new THREE.Vector3(cx+1.5,ch+1.5,cz+throneZ+2))});
+        this.collidables.push({box:new THREE.Box3(new THREE.Vector3(cx-(W+1)/2,ch+H,cz-(D+1)/2),new THREE.Vector3(cx+(W+1)/2,ch+H+1.5,cz+(D+1)/2))});
+
+        this.thronePos={x:cx,y:ch+1.1,z:cz+throneZ};
+        this._castleGroup=g;
+
+        // [old hill/moat code removed — cliff version above]
+        if (false) { // dead code fence
         // Moat (water ring around hill base)
         const moatMat = new THREE.MeshStandardMaterial({
             color: 0x4488cc, transparent: true, opacity: 0.75
@@ -1604,8 +1848,7 @@ const World = {
         // Throne pos for game logic (on hill)
         this.thronePos = { x: cx, y: ch + 1.1, z: cz + HILL_H + throneZ };
 
-        // Dance floor update via world.update — store reference
-        this._castleGroup = g;
+        } // end dead code fence
     },
 
     // === PHASE 3: Stable ===
@@ -2271,75 +2514,96 @@ const World = {
     },
 
     _addMCGrass() {
-        // Minecraft-style tall grass tufts scattered across the world
-        // Each tuft = two thin flat boxes in an X cross (like MC grass)
-        const grassColors = [0x5aA830, 0x48992A, 0x6EC038, 0x3D8822, 0x7ACC42];
-        const darkFern    = 0x2E7018;
+        // MC-accurate tall grass: VIVID green, SHORT (0.25-0.45), VERY DENSE
+        // From screenshots: individual bright blades covering terrain surface
 
-        const mat1 = new THREE.MeshStandardMaterial({ color: 0x5aA830, side: THREE.DoubleSide });
+        // Vivid MC grass colours (same bright greens as biome)
+        const gCols = [0x5DB136, 0x4CA825, 0x6DC840, 0x3E9A20, 0x78D448, 0x47B030];
+        const fernCol = 0x2E8B22;
+        const flowerCols = [0xFF6B9D, 0xFFE066, 0xFF8C42, 0xCC44FF, 0xFF4444, 0x44CCFF];
 
-        // Tall grass patches — 200 tufts scattered away from structures
-        for (let i = 0; i < 220; i++) {
-            const x = (Math.random()-0.5)*180;
-            const z = (Math.random()-0.5)*180;
-            // Skip structure areas
-            if (Math.abs(x)<18&&Math.abs(z)<18) continue;
-            if (Math.abs(x+25)<12&&Math.abs(z-20)<10) continue;
-            if (Math.abs(x-10)<12&&Math.abs(z-10)<12) continue;
-            if (Math.abs(x-85)<22&&Math.abs(z-80)<22) continue;
+        const skip = (x, z) =>
+            (Math.abs(x)<20&&Math.abs(z)<20) ||
+            (Math.abs(x+25)<14&&Math.abs(z-20)<12) ||
+            (Math.abs(x-10)<14&&Math.abs(z-10)<14) ||
+            (Math.abs(x)<20&&Math.abs(z-52)<25); // castle cliff area
+
+        // === DENSE TALL GRASS — 500 tufts ===
+        for (let i = 0; i < 500; i++) {
+            const x = (Math.random()-0.5)*170;
+            const z = (Math.random()-0.5)*170;
+            if (skip(x, z)) continue;
 
             const gy = this.getTerrainY(x, z);
-            const col = grassColors[Math.floor(Math.random()*grassColors.length)];
-            const h = 0.35 + Math.random()*0.45;
-            const w = 0.45 + Math.random()*0.3;
-            const gMat = new THREE.MeshStandardMaterial({ color: col, side: THREE.DoubleSide });
+            const col = gCols[Math.floor(Math.random()*gCols.length)];
+            const h = 0.25 + Math.random()*0.30; // SHORT like MC (0.25-0.55)
+            const w = 0.50 + Math.random()*0.25;
+            const mat = new THREE.MeshStandardMaterial({color:col, side:THREE.DoubleSide});
 
-            const g = new THREE.Group();
-            // Two flat panels crossing (MC grass style)
-            const p1 = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.03), gMat);
-            const p2 = new THREE.Mesh(new THREE.BoxGeometry(0.03, h, w), gMat);
+            const grp = new THREE.Group();
+            // MC grass = two thin planes in X pattern
+            const p1 = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.025), mat);
+            const p2 = new THREE.Mesh(new THREE.BoxGeometry(0.025, h, w), mat);
             p1.position.y = h/2; p2.position.y = h/2;
-            g.add(p1); g.add(p2);
-            g.position.set(x, gy, z);
-            GAME.scene.add(g);
+            grp.add(p1); grp.add(p2);
+            grp.position.set(x, gy, z);
+            GAME.scene.add(grp);
         }
 
-        // Ferns (darker, slightly different shape)
-        for (let i = 0; i < 80; i++) {
+        // === FLOWERS scattered — small bright dots ===
+        for (let i = 0; i < 180; i++) {
             const x = (Math.random()-0.5)*160;
             const z = (Math.random()-0.5)*160;
-            if (Math.abs(x)<15&&Math.abs(z)<15) continue;
-            if (Math.abs(x-10)<10&&Math.abs(z-10)<10) continue;
+            if (skip(x, z)) continue;
 
             const gy = this.getTerrainY(x, z);
-            const h = 0.5 + Math.random()*0.4;
-            const fMat = new THREE.MeshStandardMaterial({ color: darkFern, side: THREE.DoubleSide });
-            const g = new THREE.Group();
-            // Slightly wider fern shape
-            const p1 = new THREE.Mesh(new THREE.BoxGeometry(0.7, h, 0.03), fMat);
-            const p2 = new THREE.Mesh(new THREE.BoxGeometry(0.03, h, 0.7), fMat);
-            // Fan out at top
-            p1.rotation.z = 0.15; p2.rotation.x = 0.15;
-            p1.position.y = h/2; p2.position.y = h/2;
-            g.add(p1); g.add(p2);
-            g.position.set(x, gy, z);
-            GAME.scene.add(g);
+            const col = flowerCols[Math.floor(Math.random()*flowerCols.length)];
+            const stemM = new THREE.MeshStandardMaterial({color:0x44AA22});
+            const petM  = new THREE.MeshStandardMaterial({color:col});
+            const grp = new THREE.Group();
+            const h = 0.3 + Math.random()*0.25;
+            const stem = new THREE.Mesh(new THREE.BoxGeometry(0.06,h,0.06), stemM);
+            stem.position.y = h/2;
+            const pet = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.22,0.22), petM);
+            pet.position.y = h + 0.11;
+            grp.add(stem); grp.add(pet);
+            grp.position.set(x, gy, z);
+            GAME.scene.add(grp);
         }
 
-        // Dead bushes (MC desert bush feel — brown)
-        for (let i = 0; i < 30; i++) {
+        // === FERNS (darker, bigger) ===
+        for (let i = 0; i < 120; i++) {
+            const x = (Math.random()-0.5)*150;
+            const z = (Math.random()-0.5)*150;
+            if (skip(x, z)) continue;
+
+            const gy = this.getTerrainY(x, z);
+            const h = 0.45 + Math.random()*0.35;
+            const fMat = new THREE.MeshStandardMaterial({color:fernCol, side:THREE.DoubleSide});
+            const grp = new THREE.Group();
+            const p1 = new THREE.Mesh(new THREE.BoxGeometry(0.65,h,0.025), fMat);
+            const p2 = new THREE.Mesh(new THREE.BoxGeometry(0.025,h,0.65), fMat);
+            p1.rotation.z = 0.12; p2.rotation.x = 0.12;
+            p1.position.y = h/2; p2.position.y = h/2;
+            grp.add(p1); grp.add(p2);
+            grp.position.set(x, gy, z);
+            GAME.scene.add(grp);
+        }
+
+        // === LOW BUSHES — small green blobs ===
+        for (let i = 0; i < 80; i++) {
             const x = (Math.random()-0.5)*140;
             const z = (Math.random()-0.5)*140;
-            if (Math.abs(x)<12&&Math.abs(z)<12) continue;
+            if (skip(x, z)) continue;
+
             const gy = this.getTerrainY(x, z);
-            const bMat = new THREE.MeshStandardMaterial({ color: 0x8B6040, side: THREE.DoubleSide });
-            const g = new THREE.Group();
-            [0.3, 0.6, 0.9].forEach((h, j) => {
-                const p = new THREE.Mesh(new THREE.BoxGeometry(0.5-j*0.1, 0.08, 0.5-j*0.1), bMat);
-                p.position.y = h; g.add(p);
-            });
-            g.position.set(x, gy, z);
-            GAME.scene.add(g);
+            const col = gCols[Math.floor(Math.random()*gCols.length)];
+            const bMat = new THREE.MeshStandardMaterial({color:col});
+            const bh = 0.4 + Math.random()*0.4;
+            const bw = 0.5 + Math.random()*0.5;
+            const bush = new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bw), bMat);
+            bush.position.set(x, gy+bh/2, z);
+            GAME.scene.add(bush);
         }
     },
 
