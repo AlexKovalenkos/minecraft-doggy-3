@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Тёпа — Тест управления</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { overflow: hidden; background: #f0c4de; }
+        canvas { display: block; }
+        #info {
+            position: fixed; top: 10px; left: 10px;
+            color: #fff; font: 14px monospace;
+            background: rgba(0,0,0,0.5); padding: 8px 12px;
+            border-radius: 8px; z-index: 10;
+        }
+        #startBtn {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+            padding: 20px 60px; font-size: 24px; cursor: pointer; z-index: 100;
+            background: linear-gradient(135deg, #ff69b4, #ffd700);
+            color: #fff; border: none; border-radius: 30px; font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">WASD — двигаться | Мышь/тачпад — повернуть | Пробел — лететь | Shift — вниз</div>
+    <button id="startBtn">ИГРАТЬ</button>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script>
+    // ============ ВСЁ В ОДНОМ ФАЙЛЕ — НИКАКОГО КЭША ============
+
+    // --- Сцена ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0c4de);
+    scene.fog = new THREE.FogExp2(0xf0c4de, 0.012);
+
+    const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 500);
+    camera.position.set(0, 6, -8);
+    camera.lookAt(0, 1.6, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    // Свет
+    scene.add(new THREE.AmbientLight(0xffd4e8, 0.7));
+    const sun = new THREE.DirectionalLight(0xfff5e0, 1.2);
+    sun.position.set(40, 80, 30);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 200;
+    sun.shadow.camera.left = -60;
+    sun.shadow.camera.right = 60;
+    sun.shadow.camera.top = 60;
+    sun.shadow.camera.bottom = -60;
+    scene.add(sun);
+
+    // --- Земля ---
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0xf4a7c8 });
+    const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(100, 100),
+        groundMat
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // Край земли
+    const edge = new THREE.Mesh(
+        new THREE.BoxGeometry(100, 2, 100),
+        new THREE.MeshStandardMaterial({ color: 0xe8c9a0 })
+    );
+    edge.position.y = -1;
+    scene.add(edge);
+
+    // --- Собака (простой блок для теста) ---
+    const dogGroup = new THREE.Group();
+
+    // Тело
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(2.4, 1.4, 1.4),
+        new THREE.MeshStandardMaterial({ color: 0xb5651d })
+    );
+    body.castShadow = true;
+    dogGroup.add(body);
+
+    // Голова (лицо в +X)
+    const head = new THREE.Mesh(
+        new THREE.BoxGeometry(1.2, 1.2, 1.2),
+        new THREE.MeshStandardMaterial({ color: 0xc47a2e })
+    );
+    head.position.set(1.5, 0.3, 0);
+    head.castShadow = true;
+    dogGroup.add(head);
+
+    // Глаза
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+    const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.1), eyeMat);
+    eyeL.position.set(1.95, 0.45, 0.3);
+    dogGroup.add(eyeL);
+    const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.1), eyeMat);
+    eyeR.position.set(1.95, 0.45, -0.3);
+    dogGroup.add(eyeR);
+
+    // Ноги
+    const legMat = new THREE.MeshStandardMaterial({ color: 0xb5651d });
+    [{ x: 0.8, z: 0.4 }, { x: 0.8, z: -0.4 }, { x: -0.8, z: 0.4 }, { x: -0.8, z: -0.4 }].forEach(p => {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.9, 0.35), legMat);
+        leg.position.set(p.x, -1.15, p.z);
+        leg.castShadow = true;
+        dogGroup.add(leg);
+    });
+
+    // Крылья
+    const wingMat = new THREE.MeshStandardMaterial({ color: 0xffd700 });
+    [-0.7, 0.7].forEach(z => {
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.1, 1.0), wingMat);
+        wing.position.set(0, 0.5, z + Math.sign(z) * 0.5);
+        dogGroup.add(wing);
+    });
+
+    dogGroup.position.set(0, 1.6, 0);
+    scene.add(dogGroup);
+
+    // Деревья для ориентации
+    for (let i = 0; i < 5; i++) {
+        const trunk = new THREE.Mesh(
+            new THREE.BoxGeometry(0.8, 3, 0.8),
+            new THREE.MeshStandardMaterial({ color: 0xc48a5c })
+        );
+        const x = (Math.random() - 0.5) * 40;
+        const z = (Math.random() - 0.5) * 40;
+        trunk.position.set(x, 1.5, z);
+        trunk.castShadow = true;
+        scene.add(trunk);
+
+        const foliage = new THREE.Mesh(
+            new THREE.BoxGeometry(3, 2, 3),
+            new THREE.MeshStandardMaterial({ color: 0xff69b4 })
+        );
+        foliage.position.set(x, 3.5, z);
+        foliage.castShadow = true;
+        scene.add(foliage);
+    }
+
+    // --- Управление ---
+    let started = false;
+    let yaw = 0;
+    let cameraPitch = 0.3;
+    let vy = 0;
+    let onGround = true;
+    let isFlying = false;
+    const keys = {};
+    const SPEED = 8;
+    const FLY_SPEED = 6;
+    const GRAVITY = -15;
+    const GROUND = 1.6;
+
+    document.addEventListener('keydown', e => { keys[e.code] = true; });
+    document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    document.addEventListener('mousemove', e => {
+        if (!started) return;
+        yaw -= (e.movementX || 0) * 0.003;
+        cameraPitch += (e.movementY || 0) * 0.003;
+        cameraPitch = Math.max(-0.3, Math.min(1.2, cameraPitch));
+    });
+
+    document.addEventListener('mousedown', () => {
+        if (started && !document.pointerLockElement) {
+            renderer.domElement.requestPointerLock();
+        }
+    });
+
+    document.getElementById('startBtn').addEventListener('click', () => {
+        started = true;
+        document.getElementById('startBtn').style.display = 'none';
+        renderer.domElement.requestPointerLock();
+
+        // Камера мгновенно за спиной
+        const camDist = 8;
+        camera.position.set(
+            dogGroup.position.x - Math.sin(yaw) * camDist * Math.cos(cameraPitch),
+            dogGroup.position.y + camDist * Math.sin(cameraPitch) + 2,
+            dogGroup.position.z - Math.cos(yaw) * camDist * Math.cos(cameraPitch)
+        );
+        camera.lookAt(dogGroup.position.x, dogGroup.position.y + 1, dogGroup.position.z);
+    });
+
+    window.addEventListener('resize', () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+    });
+
+    // --- Игровой цикл ---
+    const clock = new THREE.Clock();
+
+    function loop() {
+        requestAnimationFrame(loop);
+        const dt = Math.min(clock.getDelta(), 0.05);
+
+        if (!started) {
+            renderer.render(scene, camera);
+            return;
+        }
+
+        const pos = dogGroup.position;
+
+        // Направления (формулы из v1)
+        const forwardX = Math.sin(yaw);
+        const forwardZ = Math.cos(yaw);
+        const rightX = Math.cos(yaw);
+        const rightZ = -Math.sin(yaw);
+
+        // WASD
+        let mx = 0, mz = 0;
+        if (keys['KeyW'] || keys['ArrowUp'])    { mx += forwardX; mz += forwardZ; }
+        if (keys['KeyS'] || keys['ArrowDown'])   { mx -= forwardX; mz -= forwardZ; }
+        if (keys['KeyA'] || keys['ArrowLeft'])   { mx += rightX;   mz += rightZ; }
+        if (keys['KeyD'] || keys['ArrowRight'])  { mx -= rightX;   mz -= rightZ; }
+
+        if (mx * mx + mz * mz > 0.01) {
+            const len = Math.sqrt(mx * mx + mz * mz);
+            mx /= len; mz /= len;
+        }
+
+        // Полёт
+        if (keys['Space']) {
+            isFlying = true;
+            vy = FLY_SPEED;
+        } else if ((keys['ShiftLeft'] || keys['ShiftRight']) && !onGround) {
+            vy = -FLY_SPEED;
+        } else if (!onGround) {
+            vy += GRAVITY * dt;
+        }
+        if (onGround && !keys['Space']) {
+            isFlying = false;
+            vy = 0;
+        }
+
+        // Движение
+        pos.x += mx * SPEED * dt;
+        pos.z += mz * SPEED * dt;
+        pos.y += vy * dt;
+
+        // Земля
+        if (pos.y <= GROUND) {
+            pos.y = GROUND;
+            vy = 0;
+            onGround = true;
+        } else {
+            onGround = false;
+        }
+
+        // Потолок
+        if (pos.y > 35) { pos.y = 35; vy = 0; }
+
+        // Границы
+        pos.x = Math.max(-48, Math.min(48, pos.x));
+        pos.z = Math.max(-48, Math.min(48, pos.z));
+
+        // Поворот модели (модель лицом в +X, поэтому -PI/2)
+        dogGroup.rotation.y = yaw - Math.PI / 2;
+
+        // Камера за спиной (формула из v1)
+        const camDist = 8;
+        const cx = pos.x - Math.sin(yaw) * camDist * Math.cos(cameraPitch);
+        const cz = pos.z - Math.cos(yaw) * camDist * Math.cos(cameraPitch);
+        const cy = pos.y + camDist * Math.sin(cameraPitch) + 2;
+
+        camera.position.lerp(new THREE.Vector3(cx, cy, cz), 6 * dt);
+        camera.lookAt(pos.x, pos.y + 1, pos.z);
+
+        // Солнце следует
+        sun.position.set(pos.x + 40, 80, pos.z + 30);
+        sun.target.position.copy(pos);
+        sun.target.updateMatrixWorld();
+
+        // Дебаг
+        document.getElementById('info').textContent =
+            `Y: ${pos.y.toFixed(1)} | Cam Y: ${camera.position.y.toFixed(1)} | Ground: ${onGround} | yaw: ${yaw.toFixed(2)}`;
+
+        renderer.render(scene, camera);
+    }
+
+    loop();
+    </script>
+</body>
+</html>

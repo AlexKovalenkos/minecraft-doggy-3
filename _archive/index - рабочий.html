@@ -1,0 +1,1532 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Супер Тёпа</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #f0c4de; font-family: 'Segoe UI', Arial, sans-serif; }
+        canvas { display: block; }
+
+        #ui {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+        }
+
+        .crosshair {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 24px; height: 24px; display: none;
+        }
+        .crosshair::before, .crosshair::after {
+            content: ''; position: absolute;
+            background: rgba(255,255,255,0.8); border-radius: 1px;
+        }
+        .crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+        .crosshair::after { width: 100%; height: 2px; top: 50%; transform: translateY(-50%); }
+
+        .hud {
+            position: absolute; top: 15px; left: 50%;
+            transform: translateX(-50%);
+            display: none; gap: 20px;
+            background: rgba(255, 182, 213, 0.7);
+            padding: 8px 20px; border-radius: 20px;
+            border: 2px solid rgba(255,255,255,0.5);
+        }
+        .hud-item { text-align: center; color: #6b3a5e; }
+        .hud-item .value { font-size: 22px; font-weight: bold; }
+        .hud-item .label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; }
+        .bones .value { color: #fff; }
+        .height-info .value { color: #9b59b6; }
+        .tamed .value { color: #e74c8b; }
+
+        .hotbar {
+            position: absolute; bottom: 15px; left: 50%;
+            transform: translateX(-50%);
+            display: none; gap: 4px;
+            background: rgba(255, 182, 213, 0.6);
+            padding: 6px; border-radius: 12px;
+            border: 2px solid rgba(255,255,255,0.4);
+        }
+        .hotbar-slot {
+            width: 48px; height: 48px;
+            border: 2px solid rgba(255,255,255,0.5);
+            border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            position: relative;
+        }
+        .hotbar-slot.active { border-color: #fff; background: rgba(255,255,255,0.3); }
+        .hotbar-slot .block-preview { width: 30px; height: 30px; border-radius: 3px; }
+        .hotbar-slot .key-hint {
+            position: absolute; top: 2px; right: 4px;
+            font-size: 9px; color: rgba(255,255,255,0.8); font-weight: bold;
+        }
+
+        .hint {
+            position: absolute; bottom: 80px; left: 50%;
+            transform: translateX(-50%);
+            color: #fff; font-size: 14px;
+            background: rgba(107, 58, 94, 0.7);
+            padding: 6px 14px; border-radius: 10px;
+            display: none; white-space: nowrap;
+        }
+
+        #startScreen {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: linear-gradient(135deg, #f8b4d9 0%, #fde68a 50%, #f9a8d4 100%);
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            z-index: 100; pointer-events: all;
+        }
+        #startScreen h1 {
+            font-size: 52px; color: #fff;
+            text-shadow: 3px 3px 0 #e74c8b, 6px 6px 0 rgba(0,0,0,0.1);
+            margin-bottom: 8px;
+        }
+        #startScreen .subtitle { font-size: 16px; color: #b45e8a; margin-bottom: 30px; }
+        #startScreen .controls-info {
+            background: rgba(255,255,255,0.4);
+            padding: 15px 30px; border-radius: 15px; margin-bottom: 25px;
+        }
+        #startScreen p { color: #6b3a5e; margin: 4px 0; font-size: 13px; }
+        .key { color: #e74c8b; font-weight: bold; }
+
+        #startBtn {
+            padding: 14px 50px; font-size: 18px;
+            background: linear-gradient(135deg, #ff69b4, #ffd700);
+            color: #fff; border: none; border-radius: 30px;
+            cursor: pointer; pointer-events: all; font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 15px rgba(255,105,180,0.4);
+            transition: transform 0.2s;
+        }
+        #startBtn:hover { transform: scale(1.05); }
+
+        .message {
+            position: absolute; top: 35%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff; font-size: 20px; font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            opacity: 0; transition: opacity 0.3s; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div class="crosshair" id="crosshair"></div>
+        <div class="hud" id="hud">
+            <div class="hud-item bones"><div class="value" id="boneCount">0</div><div class="label">Косточки</div></div>
+            <div class="hud-item tamed"><div class="value" id="tamedCount">0</div><div class="label">Друзья</div></div>
+            <div class="hud-item height-info"><div class="value" id="heightVal">0</div><div class="label">Высота</div></div>
+        </div>
+        <div class="hotbar" id="hotbar">
+            <div class="hotbar-slot active" data-slot="0"><div class="block-preview" style="background:#ff69b4"></div><span class="key-hint">1</span></div>
+            <div class="hotbar-slot" data-slot="1"><div class="block-preview" style="background:#ffd700"></div><span class="key-hint">2</span></div>
+            <div class="hotbar-slot" data-slot="2"><div class="block-preview" style="background:#87ceeb"></div><span class="key-hint">3</span></div>
+            <div class="hotbar-slot" data-slot="3"><div class="block-preview" style="background:#fff"></div><span class="key-hint">4</span></div>
+            <div class="hotbar-slot" data-slot="4"><div class="block-preview" style="background:#c48a5c"></div><span class="key-hint">5</span></div>
+        </div>
+        <div class="hint" id="hint"></div>
+        <div class="message" id="message"></div>
+        <div id="startScreen">
+            <h1>СУПЕР ТЁПА</h1>
+            <div class="subtitle">Летающий пёсик на волшебной полянке</div>
+            <div class="controls-info">
+                <p><span class="key">W A S D</span> — Бегать</p>
+                <p><span class="key">Мышь / Тачпад</span> — Поворачивать Тёпу</p>
+                <p><span class="key">ПРОБЕЛ</span> — Летать вверх</p>
+                <p><span class="key">SHIFT</span> — Спуститься</p>
+                <p><span class="key">E</span> — Приручить единорожка</p>
+                <p><span class="key">Q</span> — Гавкнуть</p>
+                <p><span class="key">1-5</span> — Выбрать блок</p>
+                <p><span class="key">Z</span> — Поставить блок &nbsp; <span class="key">X</span> — Убрать блок</p>
+            </div>
+            <button id="startBtn">ИГРАТЬ!</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+    <!-- ============================================================ -->
+    <!-- game.js — Scene, renderer, lighting, rainbow, terrain        -->
+    <!-- ============================================================ -->
+    <script>
+const GAME = {
+    started: false,
+    clock: new THREE.Clock(),
+    animTime: 0,
+    WORLD_SIZE: 50,
+    MAX_HEIGHT: 35,
+    BLOCK_SIZE: 1
+};
+
+// === SCENE ===
+GAME.scene = new THREE.Scene();
+GAME.scene.background = new THREE.Color(0xf0c4de);
+GAME.scene.fog = new THREE.FogExp2(0xf0c4de, 0.012);
+
+// === CAMERA ===
+GAME.camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 500);
+GAME.camera.position.set(0, 6, -8);
+GAME.camera.lookAt(0, 1.6, 0);
+
+// === RENDERER ===
+GAME.renderer = new THREE.WebGLRenderer({ antialias: true });
+GAME.renderer.setSize(window.innerWidth, window.innerHeight);
+GAME.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+GAME.renderer.shadowMap.enabled = true;
+GAME.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(GAME.renderer.domElement);
+
+// === LIGHTING ===
+GAME.scene.add(new THREE.AmbientLight(0xffd4e8, 0.7));
+
+GAME.sun = new THREE.DirectionalLight(0xfff5e0, 1.2);
+GAME.sun.position.set(40, 80, 30);
+GAME.sun.castShadow = true;
+GAME.sun.shadow.mapSize.width = 2048;
+GAME.sun.shadow.mapSize.height = 2048;
+GAME.sun.shadow.camera.near = 1;
+GAME.sun.shadow.camera.far = 200;
+GAME.sun.shadow.camera.left = -60;
+GAME.sun.shadow.camera.right = 60;
+GAME.sun.shadow.camera.top = 60;
+GAME.sun.shadow.camera.bottom = -60;
+GAME.scene.add(GAME.sun);
+
+const fillLight = new THREE.DirectionalLight(0xffe0f0, 0.3);
+fillLight.position.set(-30, 20, -20);
+GAME.scene.add(fillLight);
+
+// === RAINBOW ===
+(function() {
+    const colors = [0xff0000, 0xff7f00, 0xffff00, 0x00ff00, 0x0000ff, 0x4b0082, 0x9400d3];
+    const group = new THREE.Group();
+    colors.forEach((color, i) => {
+        const geom = new THREE.TorusGeometry(80 - i * 2.5, 1.2, 8, 64, Math.PI);
+        const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+        const torus = new THREE.Mesh(geom, mat);
+        torus.rotation.x = Math.PI / 2;
+        torus.rotation.z = Math.PI;
+        group.add(torus);
+    });
+    group.position.set(0, 5, -70);
+    GAME.scene.add(group);
+})();
+
+// === TERRAIN ===
+(function() {
+    // Grass texture
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 128;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#f4a7c8';
+    ctx.fillRect(0, 0, 128, 128);
+    for (let i = 0; i < 300; i++) {
+        ctx.fillStyle = Math.random() > 0.5 ? '#f0b6d0' : '#e89ab8';
+        ctx.fillRect(Math.random() * 128, Math.random() * 128, 2 + Math.random() * 3, 2 + Math.random() * 3);
+    }
+    for (let i = 0; i < 40; i++) {
+        ctx.fillStyle = '#ffe066';
+        ctx.fillRect(Math.random() * 128, Math.random() * 128, 2, 2);
+    }
+    const tex = new THREE.CanvasTexture(cv);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(12, 12);
+
+    const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(GAME.WORLD_SIZE * 2, GAME.WORLD_SIZE * 2),
+        new THREE.MeshStandardMaterial({ map: tex })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    GAME.scene.add(ground);
+    GAME.ground = ground;
+
+    // Dirt edge
+    const edge = new THREE.Mesh(
+        new THREE.BoxGeometry(GAME.WORLD_SIZE * 2, 2, GAME.WORLD_SIZE * 2),
+        new THREE.MeshStandardMaterial({ color: 0xe8c9a0 })
+    );
+    edge.position.y = -1;
+    edge.receiveShadow = true;
+    GAME.scene.add(edge);
+})();
+
+// === RESIZE ===
+window.addEventListener('resize', () => {
+    GAME.camera.aspect = window.innerWidth / window.innerHeight;
+    GAME.camera.updateProjectionMatrix();
+    GAME.renderer.setSize(window.innerWidth, window.innerHeight);
+});
+    </script>
+
+    <!-- ============================================================ -->
+    <!-- sounds.js — Web Audio API sounds                             -->
+    <!-- ============================================================ -->
+    <script>
+const Sounds = {
+    _ctx: null,
+
+    _getCtx() {
+        if (!this._ctx) this._ctx = new (window.AudioContext || window.webkitAudioContext)();
+        return this._ctx;
+    },
+
+    _tone(freq, duration, type, vol) {
+        const ctx = this._getCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(vol, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+    },
+
+    bark() {
+        const ctx = this._getCtx();
+        const now = ctx.currentTime;
+        this._barkSyllable(now, 350, 0.12, 0.08);
+        this._barkSyllable(now + 0.1, 250, 0.18, 0.15);
+    },
+
+    _barkSyllable(startTime, baseFreq, duration, vol) {
+        const ctx = this._getCtx();
+
+        const osc1 = ctx.createOscillator();
+        osc1.type = 'sawtooth';
+        osc1.frequency.setValueAtTime(baseFreq, startTime);
+        osc1.frequency.exponentialRampToValueAtTime(baseFreq * 0.7, startTime + duration);
+
+        const osc2 = ctx.createOscillator();
+        osc2.type = 'square';
+        osc2.frequency.setValueAtTime(baseFreq * 1.5, startTime);
+        osc2.frequency.exponentialRampToValueAtTime(baseFreq, startTime + duration);
+
+        const bufSize = Math.max(1, Math.floor(ctx.sampleRate * duration));
+        const noiseBuf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+        const data = noiseBuf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * 0.3;
+        const noise = ctx.createBufferSource();
+        noise.buffer = noiseBuf;
+
+        const formant = ctx.createBiquadFilter();
+        formant.type = 'bandpass';
+        formant.frequency.setValueAtTime(800, startTime);
+        formant.Q.setValueAtTime(2, startTime);
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.001, startTime);
+        gain.gain.linearRampToValueAtTime(vol, startTime + 0.01);
+        gain.gain.setValueAtTime(vol, startTime + duration * 0.3);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+        osc1.connect(formant);
+        osc2.connect(formant);
+        noise.connect(formant);
+        formant.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc1.start(startTime);
+        osc1.stop(startTime + duration);
+        osc2.start(startTime);
+        osc2.stop(startTime + duration);
+        noise.start(startTime);
+        noise.stop(startTime + duration);
+    },
+
+    pickup() {
+        this._tone(800, 0.08, 'sine', 0.12);
+        setTimeout(() => this._tone(1200, 0.12, 'sine', 0.1), 80);
+    },
+
+    step() { this._tone(100 + Math.random() * 50, 0.05, 'triangle', 0.05); },
+    wing() { this._tone(200 + Math.random() * 100, 0.08, 'sine', 0.04); },
+    place() { this._tone(300, 0.06, 'square', 0.08); },
+    break() { this._tone(150, 0.1, 'sawtooth', 0.08); },
+
+    tame() {
+        [600, 800, 1000, 1200].forEach((f, i) =>
+            setTimeout(() => this._tone(f, 0.15, 'sine', 0.1), i * 120)
+        );
+    }
+};
+    </script>
+
+    <!-- ============================================================ -->
+    <!-- dog.js — Dog model and animations                            -->
+    <!-- All parts go directly on this.group (g), no inner model      -->
+    <!-- ============================================================ -->
+    <script>
+const Dog = {
+    group: new THREE.Group(),
+    pivots: {},
+
+    // Physics
+    vy: 0,
+    speed: 8,
+    flySpeed: 6,
+    gravity: -15,
+    isFlying: false,
+    onGround: true,
+
+    // Direction
+    yaw: 0,
+
+    init() {
+        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xb5651d });
+        const bodyLightMat = new THREE.MeshStandardMaterial({ color: 0xc47a2e });
+        const headTopMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+        const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+        const noseMat = new THREE.MeshStandardMaterial({ color: 0x3d2b1f });
+        const wingMat = new THREE.MeshStandardMaterial({ color: 0xffd700 });
+        const wingDotMat = new THREE.MeshStandardMaterial({ color: 0x2244aa });
+
+        const g = this.group;
+
+        // Body
+        const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.4, 1.6), bodyMat);
+        body.castShadow = true;
+        g.add(body);
+        this.body = body;
+
+        // Head
+        const head = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.2, 1.3), bodyLightMat);
+        head.position.set(1.55, 0.3, 0);
+        head.castShadow = true;
+        g.add(head);
+        this.head = head;
+
+        // Head top (dark cap)
+        const headTop = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.3, 1.3), headTopMat);
+        headTop.position.set(1.55, 0.9, 0);
+        headTop.castShadow = true;
+        g.add(headTop);
+
+        // Eyes
+        const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.1), eyeMat);
+        eyeL.position.set(2.1, 0.4, 0.32);
+        g.add(eyeL);
+        const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.1), eyeMat);
+        eyeR.position.set(2.1, 0.4, -0.32);
+        g.add(eyeR);
+
+        // Eye whites
+        const eyeWMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        const ewL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.05), eyeWMat);
+        ewL.position.set(2.13, 0.5, 0.38);
+        g.add(ewL);
+        const ewR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.05), eyeWMat);
+        ewR.position.set(2.13, 0.5, -0.25);
+        g.add(ewR);
+
+        // Nose
+        const nose = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.18, 0.25), noseMat);
+        nose.position.set(2.15, 0.1, 0);
+        g.add(nose);
+
+        // Mouth
+        const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.4), noseMat);
+        mouth.position.set(2.12, -0.02, 0);
+        g.add(mouth);
+
+        // Ears
+        const earGeom = new THREE.BoxGeometry(0.35, 0.55, 0.3);
+        const earL = new THREE.Mesh(earGeom, headTopMat);
+        earL.position.set(1.35, 1.15, 0.35);
+        earL.rotation.z = 0.15;
+        earL.castShadow = true;
+        g.add(earL);
+
+        const earR = new THREE.Mesh(earGeom, headTopMat);
+        earR.position.set(1.35, 1.15, -0.35);
+        earR.rotation.z = -0.15;
+        earR.castShadow = true;
+        g.add(earR);
+
+        // Legs with pivots for animation
+        const legGeom = new THREE.BoxGeometry(0.4, 0.9, 0.4);
+        const legPositions = [
+            { name: 'FL', x: 0.8, z: 0.5 },
+            { name: 'FR', x: 0.8, z: -0.5 },
+            { name: 'BL', x: -0.8, z: 0.5 },
+            { name: 'BR', x: -0.8, z: -0.5 }
+        ];
+
+        legPositions.forEach(lp => {
+            const pivot = new THREE.Group();
+            pivot.position.set(lp.x, -0.7, lp.z);
+            const leg = new THREE.Mesh(legGeom, bodyMat);
+            leg.position.y = -0.45;
+            leg.castShadow = true;
+            pivot.add(leg);
+            g.add(pivot);
+            this.pivots['leg' + lp.name] = pivot;
+        });
+
+        // Tail - hangs down
+        const tailPivot = new THREE.Group();
+        tailPivot.position.set(-1.2, 0, 0);
+        const tail = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, 0.2), bodyMat);
+        tail.position.set(0, -0.35, 0);
+        tail.castShadow = true;
+        tailPivot.add(tail);
+        g.add(tailPivot);
+        this.pivots.tail = tailPivot;
+
+        // Wings - wide, flat, to the sides with blue dot grid
+        this._buildWing('L', wingMat, wingDotMat, 0.8, 1);
+        this._buildWing('R', wingMat, wingDotMat, -0.8, -1);
+
+        g.position.set(0, 1.6, 0);
+        GAME.scene.add(g);
+    },
+
+    _buildWing(side, wingMat, dotMat, zOffset, zDir) {
+        const pivot = new THREE.Group();
+        pivot.position.set(-0.2, 0.5, zOffset);
+
+        const wing = new THREE.Group();
+
+        // Wing base
+        const plane = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.1, 1.5), wingMat);
+        plane.position.set(0, 0, 0.75 * zDir);
+        plane.castShadow = true;
+        wing.add(plane);
+
+        // Rounded tip
+        const tip = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.1, 0.5), wingMat);
+        tip.position.set(0, 0, 1.6 * zDir);
+        wing.add(tip);
+
+        // Blue dots 3 columns x 2 rows
+        for (let col = -0.6; col <= 0.6; col += 0.6) {
+            for (let row = 0; row < 2; row++) {
+                const dot = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.25, 0.14, 0.25),
+                    dotMat
+                );
+                dot.position.set(col, 0.07, (0.4 + row * 0.55) * zDir);
+                wing.add(dot);
+            }
+        }
+
+        pivot.add(wing);
+        this.group.add(pivot);
+        this.pivots['wing' + side] = pivot;
+    },
+
+    // Animation
+    animate(dt, t, isMoving) {
+        const walkSpeed = 10;
+        const flyWingSpeed = 12;
+        const flying = this.isFlying || !this.onGround;
+
+        // Legs
+        if (isMoving && this.onGround) {
+            const a = Math.sin(t * walkSpeed) * 0.5;
+            this.pivots.legFL.rotation.x = a;
+            this.pivots.legBR.rotation.x = a;
+            this.pivots.legFR.rotation.x = -a;
+            this.pivots.legBL.rotation.x = -a;
+        } else if (flying) {
+            this.pivots.legFL.rotation.x = 0.3;
+            this.pivots.legFR.rotation.x = 0.3;
+            this.pivots.legBL.rotation.x = -0.3;
+            this.pivots.legBR.rotation.x = -0.3;
+        } else {
+            ['legFL', 'legFR', 'legBL', 'legBR'].forEach(k => {
+                this.pivots[k].rotation.x *= 0.9;
+            });
+        }
+
+        // Wings
+        if (flying) {
+            const wa = Math.sin(t * flyWingSpeed) * 0.5;
+            this.pivots.wingL.rotation.x = wa;
+            this.pivots.wingR.rotation.x = -wa;
+        } else {
+            const ra = Math.sin(t * 2) * 0.03;
+            this.pivots.wingL.rotation.x = ra;
+            this.pivots.wingR.rotation.x = -ra;
+        }
+
+        // Tail wag
+        this.pivots.tail.rotation.z = Math.sin(t * 6) * 0.35;
+        this.pivots.tail.rotation.x = -0.2 + Math.sin(t * 3) * 0.1;
+
+        // Body bob
+        if (isMoving && this.onGround) {
+            const bob = Math.sin(t * walkSpeed * 2) * 0.05;
+            this.body.position.y = bob;
+            this.head.position.y = 0.3 + bob;
+        }
+    }
+};
+
+Dog.init();
+    </script>
+
+    <!-- ============================================================ -->
+    <!-- world.js — Trees, flowers, lake, rocks, clouds               -->
+    <!-- ============================================================ -->
+    <script>
+const World = {
+    clouds: [],
+
+    init() {
+        this._createTrees();
+        this._createFlowers();
+        this._createLake();
+        this._createRocks();
+        this._createClouds();
+    },
+
+    _createTrees() {
+        const positions = [
+            [-15, -12], [18, 8], [-8, 20], [12, -18],
+            [-20, 5], [5, -22], [22, 22], [-18, -22]
+        ];
+        const foliageColors = [0xff69b4, 0xffd700, 0xff85a2, 0xffe066];
+
+        positions.forEach(([x, z]) => {
+            const g = new THREE.Group();
+            const trunkH = 3 + Math.random() * 2;
+
+            const trunk = new THREE.Mesh(
+                new THREE.BoxGeometry(0.8, trunkH, 0.8),
+                new THREE.MeshStandardMaterial({ color: 0xc48a5c })
+            );
+            trunk.position.y = trunkH / 2;
+            trunk.castShadow = true;
+            trunk.receiveShadow = true;
+            g.add(trunk);
+
+            const count = 5 + Math.floor(Math.random() * 4);
+            for (let i = 0; i < count; i++) {
+                const s = 1.2 + Math.random() * 1.2;
+                const leaf = new THREE.Mesh(
+                    new THREE.BoxGeometry(s, s, s),
+                    new THREE.MeshStandardMaterial({ color: foliageColors[Math.floor(Math.random() * foliageColors.length)] })
+                );
+                leaf.position.set(
+                    (Math.random() - 0.5) * 2,
+                    trunkH + (Math.random() - 0.3) * 2,
+                    (Math.random() - 0.5) * 2
+                );
+                leaf.castShadow = true;
+                g.add(leaf);
+            }
+
+            g.position.set(x, 0, z);
+            GAME.scene.add(g);
+        });
+    },
+
+    _createFlowers() {
+        const colors = [0xff69b4, 0xffd700, 0xff85a2, 0xffe066, 0xffb6c1];
+        for (let i = 0; i < 30; i++) {
+            const x = (Math.random() - 0.5) * GAME.WORLD_SIZE * 1.6;
+            const z = (Math.random() - 0.5) * GAME.WORLD_SIZE * 1.6;
+            if (Math.abs(x - 10) < 6 && Math.abs(z - 10) < 6) continue;
+
+            const g = new THREE.Group();
+            const stem = new THREE.Mesh(
+                new THREE.BoxGeometry(0.08, 0.4, 0.08),
+                new THREE.MeshStandardMaterial({ color: 0x7dba5c })
+            );
+            stem.position.y = 0.2;
+            g.add(stem);
+
+            const petal = new THREE.Mesh(
+                new THREE.BoxGeometry(0.3, 0.3, 0.3),
+                new THREE.MeshStandardMaterial({ color: colors[Math.floor(Math.random() * colors.length)] })
+            );
+            petal.position.y = 0.5;
+            g.add(petal);
+
+            g.position.set(x, 0, z);
+            GAME.scene.add(g);
+        }
+    },
+
+    _createLake() {
+        const lake = new THREE.Mesh(
+            new THREE.BoxGeometry(10, 0.3, 10),
+            new THREE.MeshStandardMaterial({ color: 0x87ceeb, transparent: true, opacity: 0.6, roughness: 0.1, metalness: 0.1 })
+        );
+        lake.position.set(10, 0.05, 10);
+        lake.receiveShadow = true;
+        GAME.scene.add(lake);
+
+        for (let i = 0; i < 12; i++) {
+            const angle = (i / 12) * Math.PI * 2;
+            const r = 5.5 + Math.random();
+            const rock = new THREE.Mesh(
+                new THREE.BoxGeometry(0.5 + Math.random() * 0.5, 0.3 + Math.random() * 0.3, 0.5 + Math.random() * 0.5),
+                new THREE.MeshStandardMaterial({ color: 0xd4a574 })
+            );
+            rock.position.set(10 + Math.cos(angle) * r, 0.15, 10 + Math.sin(angle) * r);
+            rock.castShadow = true;
+            GAME.scene.add(rock);
+        }
+    },
+
+    _createRocks() {
+        [[-10, -15], [20, -10], [-5, 15], [15, -5]].forEach(([x, z]) => {
+            const s = 0.8 + Math.random() * 1.2;
+            const rock = new THREE.Mesh(
+                new THREE.BoxGeometry(s, s * 0.6, s),
+                new THREE.MeshStandardMaterial({ color: 0xd4a574 })
+            );
+            rock.position.set(x, s * 0.3, z);
+            rock.castShadow = true;
+            GAME.scene.add(rock);
+        });
+    },
+
+    _createClouds() {
+        const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
+        for (let i = 0; i < 6; i++) {
+            const g = new THREE.Group();
+            const count = 3 + Math.floor(Math.random() * 3);
+            for (let j = 0; j < count; j++) {
+                const part = new THREE.Mesh(
+                    new THREE.BoxGeometry(2 + Math.random() * 3, 1 + Math.random(), 2 + Math.random() * 2),
+                    mat
+                );
+                part.position.set((Math.random() - 0.5) * 3, (Math.random() - 0.5) * 0.5, (Math.random() - 0.5) * 2);
+                g.add(part);
+            }
+            g.position.set(
+                (Math.random() - 0.5) * 120,
+                25 + Math.random() * 15,
+                (Math.random() - 0.5) * 120
+            );
+            g.userData.speed = 0.3 + Math.random() * 0.5;
+            GAME.scene.add(g);
+            this.clouds.push(g);
+        }
+    },
+
+    update(dt) {
+        this.clouds.forEach(c => {
+            c.position.x += c.userData.speed * dt;
+            if (c.position.x > 80) c.position.x = -80;
+        });
+    }
+};
+
+World.init();
+    </script>
+
+    <!-- ============================================================ -->
+    <!-- npcs.js — Unicorns and butterflies                           -->
+    <!-- ============================================================ -->
+    <script>
+const NPCs = {
+    unicorns: [],
+    butterflies: [],
+    tamedCount: 0,
+
+    init() {
+        this._createUnicorn(-12, 8);
+        this._createUnicorn(8, -15);
+        this._createUnicorn(-5, -8);
+
+        this._createButterfly(-5, 3, 5);
+        this._createButterfly(12, 4, -8);
+        this._createButterfly(-15, 2.5, -5);
+    },
+
+    _createUnicorn(x, z) {
+        const g = new THREE.Group();
+        const white = new THREE.MeshStandardMaterial({ color: 0xfff5f5 });
+        const hornMat = new THREE.MeshStandardMaterial({ color: 0xffd700 });
+        const eyeMat = new THREE.MeshStandardMaterial({ color: 0x4a0080 });
+        const hoofMat = new THREE.MeshStandardMaterial({ color: 0xd4a574 });
+
+        // Body
+        const body = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.3, 1.1), white);
+        body.castShadow = true;
+        g.add(body);
+
+        // Belly
+        const belly = new THREE.Mesh(
+            new THREE.BoxGeometry(1.8, 0.2, 0.9),
+            new THREE.MeshStandardMaterial({ color: 0xffe0ec })
+        );
+        belly.position.set(0, -0.55, 0);
+        g.add(belly);
+
+        // Head
+        const head = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.0, 0.9), white);
+        head.position.set(1.3, 0.35, 0);
+        head.castShadow = true;
+        g.add(head);
+
+        // Snout
+        const snout = new THREE.Mesh(
+            new THREE.BoxGeometry(0.3, 0.5, 0.6),
+            new THREE.MeshStandardMaterial({ color: 0xffd9e8 })
+        );
+        snout.position.set(1.7, 0.15, 0);
+        g.add(snout);
+
+        // Nostrils
+        const nostrilMat = new THREE.MeshStandardMaterial({ color: 0xf0a0b0 });
+        [0.12, -0.12].forEach(zz => {
+            const n = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.08, 0.08), nostrilMat);
+            n.position.set(1.86, 0.15, zz);
+            g.add(n);
+        });
+
+        // Eyes
+        [0.25, -0.25].forEach(zz => {
+            const eye = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.25, 0.08), eyeMat);
+            eye.position.set(1.71, 0.45, zz);
+            g.add(eye);
+            const hl = new THREE.Mesh(
+                new THREE.BoxGeometry(0.08, 0.08, 0.04),
+                new THREE.MeshStandardMaterial({ color: 0xffffff })
+            );
+            hl.position.set(1.73, 0.52, zz + 0.06 * Math.sign(zz));
+            g.add(hl);
+        });
+
+        // Eyelashes
+        [0.25, -0.25].forEach(zz => {
+            const lash = new THREE.Mesh(
+                new THREE.BoxGeometry(0.12, 0.04, 0.04),
+                eyeMat
+            );
+            lash.position.set(1.71, 0.6, zz);
+            g.add(lash);
+        });
+
+        // Horn (3 sections)
+        [0, 0.3, 0.55].forEach((y, i) => {
+            const s = 0.2 - i * 0.05;
+            const h = new THREE.Mesh(
+                new THREE.BoxGeometry(s, 0.3, s),
+                hornMat
+            );
+            h.position.set(1.3, 1.05 + y, 0);
+            g.add(h);
+        });
+
+        // Mane - rainbow
+        const maneColors = [0xff69b4, 0xff85a2, 0xffd700, 0x87ceeb, 0xc8a2c8, 0xffb6c1];
+        for (let i = 0; i < 6; i++) {
+            const mane = new THREE.Mesh(
+                new THREE.BoxGeometry(0.25, 0.35 + Math.random() * 0.15, 0.35),
+                new THREE.MeshStandardMaterial({ color: maneColors[i % maneColors.length] })
+            );
+            mane.position.set(0.9 - i * 0.3, 0.85 + Math.sin(i * 0.8) * 0.1, 0);
+            mane.castShadow = true;
+            g.add(mane);
+        }
+        // Side strand
+        for (let i = 0; i < 3; i++) {
+            const strand = new THREE.Mesh(
+                new THREE.BoxGeometry(0.15, 0.3, 0.1),
+                new THREE.MeshStandardMaterial({ color: maneColors[(i + 2) % maneColors.length] })
+            );
+            strand.position.set(1.0 - i * 0.25, 0.55, 0.5);
+            g.add(strand);
+        }
+
+        // Legs with hooves
+        [0.65, -0.65].forEach(lx => {
+            [0.3, -0.3].forEach(lz => {
+                const leg = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.8, 0.25), white);
+                leg.position.set(lx, -0.9, lz);
+                leg.castShadow = true;
+                g.add(leg);
+                const hoof = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.15, 0.28), hoofMat);
+                hoof.position.set(lx, -1.3, lz);
+                g.add(hoof);
+            });
+        });
+
+        // Tail - rainbow
+        const tailColors = [0xff69b4, 0xffd700, 0xc8a2c8, 0x87ceeb];
+        for (let i = 0; i < 4; i++) {
+            const tPart = new THREE.Mesh(
+                new THREE.BoxGeometry(0.12, 0.4 + Math.random() * 0.2, 0.12),
+                new THREE.MeshStandardMaterial({ color: tailColors[i] })
+            );
+            tPart.position.set(-1.15 - i * 0.08, -0.1 - i * 0.15, (Math.random() - 0.5) * 0.2);
+            tPart.rotation.x = 0.3 + i * 0.15;
+            g.add(tPart);
+        }
+
+        g.position.set(x, 1.5, z);
+        g.userData = {
+            tamed: false,
+            tamedIndex: -1,
+            aiTimer: 0,
+            aiDir: Math.random() * Math.PI * 2,
+            aiSpeed: 1.5 + Math.random(),
+            aiMoving: true
+        };
+
+        GAME.scene.add(g);
+        this.unicorns.push(g);
+    },
+
+    _createButterfly(x, y, z) {
+        const g = new THREE.Group();
+        const colors = [0xff69b4, 0xffd700, 0xff85a2, 0xffc0cb];
+        const mat = new THREE.MeshStandardMaterial({
+            color: colors[Math.floor(Math.random() * colors.length)],
+            side: THREE.DoubleSide
+        });
+
+        const wL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 0.35), mat);
+        wL.position.z = 0.2;
+        g.add(wL);
+        const wR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 0.35), mat);
+        wR.position.z = -0.2;
+        g.add(wR);
+
+        g.add(new THREE.Mesh(
+            new THREE.BoxGeometry(0.4, 0.08, 0.08),
+            new THREE.MeshStandardMaterial({ color: 0x3d2b1f })
+        ));
+
+        g.position.set(x, y, z);
+        g.userData = {
+            baseY: y, phase: Math.random() * Math.PI * 2,
+            centerX: x, centerZ: z,
+            radius: 2 + Math.random() * 3,
+            wL, wR
+        };
+
+        GAME.scene.add(g);
+        this.butterflies.push(g);
+    },
+
+    tryTame() {
+        this.unicorns.forEach(u => {
+            if (u.userData.tamed) return;
+            if (Dog.group.position.distanceTo(u.position) < 4) {
+                u.userData.tamed = true;
+                u.userData.tamedIndex = this.tamedCount;
+                this.tamedCount++;
+                document.getElementById('tamedCount').textContent = this.tamedCount;
+                Effects.spawnHearts(u.position.x, u.position.y + 1, u.position.z);
+                Sounds.tame();
+                Effects.showMessage('Единорожек приручён! (' + this.tamedCount + '/3)');
+            }
+        });
+    },
+
+    update(dt, t) {
+        const bound = GAME.WORLD_SIZE - 2;
+
+        // Unicorn AI
+        this.unicorns.forEach(u => {
+            const d = u.userData;
+            if (d.tamed) {
+                const followDist = 3.5 + d.tamedIndex * 2.5;
+                const angleOffset = d.tamedIndex * 1.2;
+
+                // v1 formula: minus signs for behind position
+                const behindX = Dog.group.position.x - Math.sin(Dog.yaw + angleOffset) * followDist;
+                const behindZ = Dog.group.position.z - Math.cos(Dog.yaw + angleOffset) * followDist;
+
+                const dx = behindX - u.position.x;
+                const dz = behindZ - u.position.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+
+                if (dist > 1) {
+                    const speed = Math.min(dist * 2, 5);
+                    u.position.x += (dx / dist) * speed * dt;
+                    u.position.z += (dz / dist) * speed * dt;
+                    u.rotation.y = Math.atan2(dx, dz);
+                }
+            } else {
+                // Wander
+                d.aiTimer -= dt;
+                if (d.aiTimer <= 0) {
+                    d.aiTimer = 2 + Math.random() * 3;
+                    d.aiDir = Math.random() * Math.PI * 2;
+                    d.aiMoving = Math.random() > 0.3;
+                }
+                if (d.aiMoving) {
+                    const mx = Math.sin(d.aiDir) * d.aiSpeed * dt;
+                    const mz = Math.cos(d.aiDir) * d.aiSpeed * dt;
+                    u.position.x += mx;
+                    u.position.z += mz;
+                    u.rotation.y = Math.atan2(mx, mz);
+                    if (Math.abs(u.position.x) > bound) d.aiDir += Math.PI;
+                    if (Math.abs(u.position.z) > bound) d.aiDir += Math.PI;
+                    u.position.x = Math.max(-bound, Math.min(bound, u.position.x));
+                    u.position.z = Math.max(-bound, Math.min(bound, u.position.z));
+                }
+            }
+            u.position.y = 1.5;
+        });
+
+        // Butterflies
+        this.butterflies.forEach(b => {
+            const d = b.userData;
+            const bt = t + d.phase;
+            b.position.x = d.centerX + Math.sin(bt * 0.7) * d.radius;
+            b.position.z = d.centerZ + Math.cos(bt * 0.5) * d.radius;
+            b.position.y = d.baseY + Math.sin(bt * 1.5) * 0.8;
+            b.rotation.y = bt * 0.7;
+            d.wL.rotation.x = Math.sin(bt * 12) * 0.5;
+            d.wR.rotation.x = -Math.sin(bt * 12) * 0.5;
+        });
+
+        // Hint
+        let hint = '';
+        this.unicorns.forEach(u => {
+            if (!u.userData.tamed && Dog.group.position.distanceTo(u.position) < 5) {
+                hint = 'Нажми E чтобы приручить единорожка!';
+            }
+        });
+        const el = document.getElementById('hint');
+        el.textContent = hint;
+        el.style.display = hint ? 'block' : 'none';
+    }
+};
+
+NPCs.init();
+    </script>
+
+    <!-- ============================================================ -->
+    <!-- items.js — Bones and block building                          -->
+    <!-- ============================================================ -->
+    <script>
+const Items = {
+    bones: [],
+    placedBlocks: [],
+    bonesCollected: 0,
+    blockColors: [0xff69b4, 0xffd700, 0x87ceeb, 0xffffff, 0xc48a5c],
+
+    raycaster: new THREE.Raycaster(),
+    pointerCenter: new THREE.Vector2(0, 0),
+
+    init() {
+        this._createBones();
+    },
+
+    _createBones() {
+        const mat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+        for (let i = 0; i < 12; i++) {
+            let x, z;
+            do {
+                x = (Math.random() - 0.5) * GAME.WORLD_SIZE * 1.5;
+                z = (Math.random() - 0.5) * GAME.WORLD_SIZE * 1.5;
+            } while (Math.abs(x - 10) < 6 && Math.abs(z - 10) < 6);
+
+            const g = new THREE.Group();
+            const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.15, 0.15), mat);
+            g.add(shaft);
+            const end1 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.35, 0.15), mat);
+            end1.position.x = 0.4;
+            g.add(end1);
+            const end2 = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.35, 0.15), mat);
+            end2.position.x = -0.4;
+            g.add(end2);
+
+            g.position.set(x, 0.5, z);
+            g.userData.collected = false;
+            GAME.scene.add(g);
+            this.bones.push(g);
+        }
+    },
+
+    placeBlock() {
+        this.raycaster.setFromCamera(this.pointerCenter, GAME.camera);
+        const targets = [GAME.ground, ...this.placedBlocks.map(b => b.mesh)];
+        const hits = this.raycaster.intersectObjects(targets);
+        if (hits.length > 0 && hits[0].distance < 8) {
+            const hit = hits[0];
+            const pos = hit.point.clone().add(hit.face.normal.clone().multiplyScalar(0.5));
+            pos.x = Math.round(pos.x * 2) / 2;
+            pos.y = Math.max(0.5, Math.round(pos.y * 2) / 2);
+            pos.z = Math.round(pos.z * 2) / 2;
+
+            const mesh = new THREE.Mesh(
+                new THREE.BoxGeometry(GAME.BLOCK_SIZE, GAME.BLOCK_SIZE, GAME.BLOCK_SIZE),
+                new THREE.MeshStandardMaterial({ color: this.blockColors[Controls.selectedSlot] })
+            );
+            mesh.position.copy(pos);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            GAME.scene.add(mesh);
+            this.placedBlocks.push({ mesh });
+            Sounds.place();
+        }
+    },
+
+    removeBlock() {
+        this.raycaster.setFromCamera(this.pointerCenter, GAME.camera);
+        const hits = this.raycaster.intersectObjects(this.placedBlocks.map(b => b.mesh));
+        if (hits.length > 0 && hits[0].distance < 8) {
+            const mesh = hits[0].object;
+            GAME.scene.remove(mesh);
+            const idx = this.placedBlocks.findIndex(b => b.mesh === mesh);
+            if (idx >= 0) this.placedBlocks.splice(idx, 1);
+            Sounds.break();
+        }
+    },
+
+    update(dt, t) {
+        this.bones.forEach(bone => {
+            if (bone.userData.collected) return;
+            bone.rotation.y = t * 2;
+            bone.position.y = 0.5 + Math.sin(t * 3 + bone.position.x) * 0.15;
+
+            if (Dog.group.position.distanceTo(bone.position) < 2) {
+                bone.userData.collected = true;
+                GAME.scene.remove(bone);
+                this.bonesCollected++;
+                document.getElementById('boneCount').textContent = this.bonesCollected;
+                Effects.spawnParticles(bone.position.x, bone.position.y, bone.position.z, 0xffd700);
+                Sounds.pickup();
+            }
+        });
+    }
+};
+
+Items.init();
+    </script>
+
+    <!-- ============================================================ -->
+    <!-- effects.js — Particles and messages                          -->
+    <!-- ============================================================ -->
+    <script>
+const Effects = {
+    particles: [],
+    messageTimer: 0,
+
+    spawnParticles(x, y, z, color, count) {
+        count = count || 8;
+        for (let i = 0; i < count; i++) {
+            const s = 0.1 + Math.random() * 0.15;
+            const p = new THREE.Mesh(
+                new THREE.BoxGeometry(s, s, s),
+                new THREE.MeshBasicMaterial({ color, transparent: true })
+            );
+            p.position.set(x, y, z);
+            p.userData = {
+                vx: (Math.random() - 0.5) * 4,
+                vy: 2 + Math.random() * 3,
+                vz: (Math.random() - 0.5) * 4,
+                life: 1.0
+            };
+            GAME.scene.add(p);
+            this.particles.push(p);
+        }
+    },
+
+    spawnHearts(x, y, z) {
+        for (let i = 0; i < 5; i++) {
+            const s = 0.2 + Math.random() * 0.15;
+            const p = new THREE.Mesh(
+                new THREE.BoxGeometry(s, s * 0.8, s * 0.3),
+                new THREE.MeshBasicMaterial({ color: 0xff69b4, transparent: true })
+            );
+            p.position.set(x + (Math.random() - 0.5) * 2, y, z + (Math.random() - 0.5) * 2);
+            p.userData = {
+                vx: (Math.random() - 0.5),
+                vy: 1.5 + Math.random() * 2,
+                vz: (Math.random() - 0.5),
+                life: 1.5
+            };
+            GAME.scene.add(p);
+            this.particles.push(p);
+        }
+    },
+
+    showMessage(text) {
+        const el = document.getElementById('message');
+        el.textContent = text;
+        el.style.opacity = 1;
+        this.messageTimer = 2;
+    },
+
+    update(dt) {
+        // Particles
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+            const p = this.particles[i];
+            const d = p.userData;
+            d.life -= dt;
+            if (d.life <= 0) {
+                GAME.scene.remove(p);
+                this.particles.splice(i, 1);
+                continue;
+            }
+            p.position.x += d.vx * dt;
+            p.position.y += d.vy * dt;
+            p.position.z += d.vz * dt;
+            d.vy -= 5 * dt;
+            p.material.opacity = d.life;
+            p.scale.setScalar(d.life);
+        }
+
+        // Message fade
+        if (this.messageTimer > 0) {
+            this.messageTimer -= dt;
+            if (this.messageTimer <= 0) {
+                document.getElementById('message').style.opacity = 0;
+            }
+        }
+    }
+};
+    </script>
+
+    <!-- ============================================================ -->
+    <!-- controls.js — WORKING controls from test.html                -->
+    <!-- Mouse works WITHOUT pointer lock check                       -->
+    <!-- A/D SWAPPED: A += rightX, D -= rightX                       -->
+    <!-- ============================================================ -->
+    <script>
+const Controls = {
+    keys: {},
+    cameraPitch: 0.3,
+    selectedSlot: 0,
+
+    init() {
+        document.addEventListener('keydown', e => {
+            this.keys[e.code] = true;
+
+            // Bark
+            if (e.code === 'KeyQ') Sounds.bark();
+
+            // Tame
+            if (e.code === 'KeyE') NPCs.tryTame();
+
+            // Block place/remove
+            if (e.code === 'KeyZ') Items.placeBlock();
+            if (e.code === 'KeyX') Items.removeBlock();
+
+            // Hotbar
+            if (e.code >= 'Digit1' && e.code <= 'Digit5') {
+                const slot = parseInt(e.code.replace('Digit', '')) - 1;
+                this.selectedSlot = slot;
+                document.querySelectorAll('.hotbar-slot').forEach((el, i) => {
+                    el.classList.toggle('active', i === slot);
+                });
+            }
+        });
+
+        document.addEventListener('keyup', e => {
+            this.keys[e.code] = false;
+        });
+
+        // Mouse/trackpad — works WITHOUT pointer lock requirement
+        document.addEventListener('mousemove', e => {
+            if (!GAME.started) return;
+            Dog.yaw -= (e.movementX || 0) * 0.003;
+            this.cameraPitch += (e.movementY || 0) * 0.003;
+            this.cameraPitch = Math.max(-0.3, Math.min(1.2, this.cameraPitch));
+        });
+
+        // Request pointer lock on click (for better mouse capture)
+        document.addEventListener('mousedown', () => {
+            if (GAME.started && !document.pointerLockElement) {
+                GAME.renderer.domElement.requestPointerLock();
+            }
+        });
+
+        // Start button
+        document.getElementById('startBtn').addEventListener('click', () => {
+            GAME.started = true;
+            document.getElementById('startScreen').style.display = 'none';
+            document.getElementById('hud').style.display = 'flex';
+            document.getElementById('hotbar').style.display = 'flex';
+            document.getElementById('crosshair').style.display = 'block';
+
+            GAME.renderer.domElement.requestPointerLock();
+
+            // Camera instantly behind dog
+            const camDist = 8;
+            GAME.camera.position.set(
+                Dog.group.position.x - Math.sin(Dog.yaw) * camDist * Math.cos(this.cameraPitch),
+                Dog.group.position.y + camDist * Math.sin(this.cameraPitch) + 2,
+                Dog.group.position.z - Math.cos(Dog.yaw) * camDist * Math.cos(this.cameraPitch)
+            );
+            GAME.camera.lookAt(Dog.group.position.x, Dog.group.position.y + 1, Dog.group.position.z);
+        });
+    },
+
+    // Returns true if dog is moving
+    update(dt) {
+        const pos = Dog.group.position;
+
+        // Direction vectors (v1 formulas)
+        const forwardX = Math.sin(Dog.yaw);
+        const forwardZ = Math.cos(Dog.yaw);
+        const rightX = Math.cos(Dog.yaw);
+        const rightZ = -Math.sin(Dog.yaw);
+
+        // WASD — A/D SWAPPED from v1: A uses += rightX, D uses -= rightX
+        let mx = 0, mz = 0;
+        if (this.keys['KeyW'] || this.keys['ArrowUp'])    { mx += forwardX; mz += forwardZ; }
+        if (this.keys['KeyS'] || this.keys['ArrowDown'])   { mx -= forwardX; mz -= forwardZ; }
+        if (this.keys['KeyA'] || this.keys['ArrowLeft'])   { mx += rightX;   mz += rightZ; }
+        if (this.keys['KeyD'] || this.keys['ArrowRight'])  { mx -= rightX;   mz -= rightZ; }
+
+        const isMoving = (mx * mx + mz * mz) > 0.01;
+        if (isMoving) {
+            const len = Math.sqrt(mx * mx + mz * mz);
+            mx /= len; mz /= len;
+        }
+
+        // Flying
+        if (this.keys['Space']) {
+            Dog.isFlying = true;
+            Dog.vy = Dog.flySpeed;
+        } else if ((this.keys['ShiftLeft'] || this.keys['ShiftRight']) && !Dog.onGround) {
+            Dog.vy = -Dog.flySpeed;
+        } else if (!Dog.onGround) {
+            Dog.vy += Dog.gravity * dt;
+        }
+        if (Dog.onGround && !this.keys['Space']) {
+            Dog.isFlying = false;
+            Dog.vy = 0;
+        }
+
+        // Movement
+        pos.x += mx * Dog.speed * dt;
+        pos.z += mz * Dog.speed * dt;
+        pos.y += Dog.vy * dt;
+
+        // Ground check: if (pos.y <= 1.6)
+        if (pos.y <= 1.6) {
+            pos.y = 1.6;
+            Dog.vy = 0;
+            Dog.onGround = true;
+        } else {
+            Dog.onGround = false;
+        }
+
+        // Ceiling
+        if (pos.y > GAME.MAX_HEIGHT) { pos.y = GAME.MAX_HEIGHT; Dog.vy = 0; }
+
+        // World bounds
+        const bound = GAME.WORLD_SIZE - 2;
+        pos.x = Math.max(-bound, Math.min(bound, pos.x));
+        pos.z = Math.max(-bound, Math.min(bound, pos.z));
+
+        // Model rotation: Dog.group.rotation.y = yaw - Math.PI / 2
+        Dog.group.rotation.y = Dog.yaw - Math.PI / 2;
+
+        return isMoving;
+    },
+
+    updateCamera(dt) {
+        const pos = Dog.group.position;
+        const camDist = 8;
+
+        // Camera position (v1 formulas)
+        const cx = pos.x - Math.sin(Dog.yaw) * camDist * Math.cos(this.cameraPitch);
+        const cz = pos.z - Math.cos(Dog.yaw) * camDist * Math.cos(this.cameraPitch);
+        const cy = pos.y + camDist * Math.sin(this.cameraPitch) + 2;
+
+        GAME.camera.position.lerp(new THREE.Vector3(cx, cy, cz), 6 * dt);
+        GAME.camera.lookAt(pos.x, pos.y + 1, pos.z);
+
+        // Sun follows
+        GAME.sun.position.set(pos.x + 40, 80, pos.z + 30);
+        GAME.sun.target.position.copy(pos);
+        GAME.sun.target.updateMatrixWorld();
+    }
+};
+
+Controls.init();
+    </script>
+
+    <!-- ============================================================ -->
+    <!-- save.js — Save/load progress (localStorage)                  -->
+    <!-- KEY: 'super_tyopa_v3', version: 3                            -->
+    <!-- ============================================================ -->
+    <script>
+const Save = {
+    KEY: 'super_tyopa_v3',
+    autoSaveInterval: 10,
+    _timer: 0,
+
+    save() {
+        const data = {
+            version: 3,
+            dog: {
+                x: Dog.group.position.x,
+                y: Dog.group.position.y,
+                z: Dog.group.position.z,
+                yaw: Dog.yaw
+            },
+            bones: {
+                collected: Items.bonesCollected,
+                collectedIndices: Items.bones
+                    .map((b, i) => b.userData.collected ? i : -1)
+                    .filter(i => i >= 0)
+            },
+            tamed: NPCs.unicorns
+                .map((u, i) => u.userData.tamed ? i : -1)
+                .filter(i => i >= 0),
+            blocks: Items.placedBlocks.map(b => ({
+                x: b.mesh.position.x,
+                y: b.mesh.position.y,
+                z: b.mesh.position.z,
+                color: b.mesh.material.color.getHex()
+            }))
+        };
+
+        try {
+            localStorage.setItem(this.KEY, JSON.stringify(data));
+        } catch (e) {
+            // localStorage unavailable — silently skip
+        }
+    },
+
+    load() {
+        try {
+            const raw = localStorage.getItem(this.KEY);
+            if (!raw) return false;
+            const data = JSON.parse(raw);
+            if (!data || data.version !== 3) return false;
+
+            // Dog position (y not below ground)
+            if (data.dog) {
+                const safeY = Math.max(1.6, data.dog.y);
+                Dog.group.position.set(data.dog.x, safeY, data.dog.z);
+                Dog.yaw = data.dog.yaw || 0;
+            }
+
+            // Bones
+            if (data.bones) {
+                Items.bonesCollected = data.bones.collected || 0;
+                document.getElementById('boneCount').textContent = Items.bonesCollected;
+                (data.bones.collectedIndices || []).forEach(idx => {
+                    if (Items.bones[idx]) {
+                        Items.bones[idx].userData.collected = true;
+                        GAME.scene.remove(Items.bones[idx]);
+                    }
+                });
+            }
+
+            // Unicorns
+            if (data.tamed) {
+                data.tamed.forEach((idx, order) => {
+                    if (NPCs.unicorns[idx]) {
+                        NPCs.unicorns[idx].userData.tamed = true;
+                        NPCs.unicorns[idx].userData.tamedIndex = order;
+                    }
+                });
+                NPCs.tamedCount = data.tamed.length;
+                document.getElementById('tamedCount').textContent = NPCs.tamedCount;
+            }
+
+            // Blocks
+            if (data.blocks) {
+                data.blocks.forEach(bd => {
+                    const mesh = new THREE.Mesh(
+                        new THREE.BoxGeometry(GAME.BLOCK_SIZE, GAME.BLOCK_SIZE, GAME.BLOCK_SIZE),
+                        new THREE.MeshStandardMaterial({ color: bd.color })
+                    );
+                    mesh.position.set(bd.x, bd.y, bd.z);
+                    mesh.castShadow = true;
+                    mesh.receiveShadow = true;
+                    GAME.scene.add(mesh);
+                    Items.placedBlocks.push({ mesh });
+                });
+            }
+
+            return true;
+        } catch (e) {
+            return false;
+        }
+    },
+
+    update(dt) {
+        if (!GAME.started) return;
+        this._timer += dt;
+        if (this._timer >= this.autoSaveInterval) {
+            this._timer = 0;
+            this.save();
+        }
+    },
+
+    init() {
+        window.addEventListener('beforeunload', () => {
+            if (GAME.started) this.save();
+        });
+
+        const loaded = this.load();
+        if (loaded) {
+            console.log('Супер Тёпа: прогресс загружен!');
+        }
+    }
+};
+    </script>
+
+    <!-- ============================================================ -->
+    <!-- main.js — Game loop                                          -->
+    <!-- ============================================================ -->
+    <script>
+// Load save
+Save.init();
+
+let lastStepSound = 0;
+let lastWingSound = 0;
+
+function gameLoop() {
+    requestAnimationFrame(gameLoop);
+    const dt = Math.min(GAME.clock.getDelta(), 0.05);
+    GAME.animTime += dt;
+    const t = GAME.animTime;
+
+    if (!GAME.started) {
+        GAME.renderer.render(GAME.scene, GAME.camera);
+        return;
+    }
+
+    // Movement
+    const isMoving = Controls.update(dt);
+
+    // Dog animation
+    Dog.animate(dt, t, isMoving);
+
+    // Camera
+    Controls.updateCamera(dt);
+
+    // HUD height
+    document.getElementById('heightVal').textContent = Math.max(0, Math.round(Dog.group.position.y - 1.6));
+
+    // Sounds
+    if (isMoving && Dog.onGround && t - lastStepSound > 0.3) {
+        Sounds.step();
+        lastStepSound = t;
+    }
+    if (!Dog.onGround && t - lastWingSound > 0.2) {
+        Sounds.wing();
+        lastWingSound = t;
+    }
+
+    // Updates
+    Items.update(dt, t);
+    NPCs.update(dt, t);
+    World.update(dt);
+    Effects.update(dt);
+    Save.update(dt);
+
+    GAME.renderer.render(GAME.scene, GAME.camera);
+}
+
+gameLoop();
+    </script>
+</body>
+</html>

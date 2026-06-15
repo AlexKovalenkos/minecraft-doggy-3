@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Тёпа — Dog v0 (original from game)</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { overflow: hidden; background: #f0c4de; }
+        canvas { display: block; }
+        #info {
+            position: fixed; top: 10px; left: 10px;
+            color: #fff; font: 13px monospace;
+            background: rgba(0,0,0,0.5); padding: 8px 12px;
+            border-radius: 8px; z-index: 10;
+        }
+        #btns {
+            position: fixed; bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            display: flex; gap: 10px; z-index: 10;
+        }
+        #btns button {
+            padding: 8px 20px; font-size: 14px;
+            background: linear-gradient(135deg, #ff69b4, #ffd700);
+            color: #fff; border: none; border-radius: 15px;
+            cursor: pointer; font-weight: bold;
+        }
+        #btns button.on { box-shadow: 0 0 10px #fff; }
+    </style>
+</head>
+<body>
+    <div id="info">Тёпа v0 (original) | Drag to rotate</div>
+    <div id="btns">
+        <button id="bIdle" class="on" onclick="setAnim('idle')">Idle</button>
+        <button id="bWalk" onclick="setAnim('walk')">Walk</button>
+        <button id="bFly" onclick="setAnim('fly')">Fly</button>
+        <button id="bSpin" class="on" onclick="toggleSpin()">Auto-Spin</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script>
+    // ===== SCENE =====
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0c4de);
+
+    const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 100);
+    camera.position.set(7, 4.5, 9);
+    camera.lookAt(0, 1.2, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0xffd4e8, 0.8));
+    const sun = new THREE.DirectionalLight(0xfff5e0, 1.2);
+    sun.position.set(5, 10, 5);
+    sun.castShadow = true;
+    scene.add(sun);
+    const fill = new THREE.DirectionalLight(0xffe0f0, 0.4);
+    fill.position.set(-4, 6, -4);
+    scene.add(fill);
+
+    const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(20, 20),
+        new THREE.MeshStandardMaterial({ color: 0xf4a7c8 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // ===== DOG v0 — Original from game (dog.js) =====
+    const dog = new THREE.Group();
+    const pivots = {};
+
+    const bodyMat = new THREE.MeshStandardMaterial({ color: 0xb5651d });
+    const bodyLightMat = new THREE.MeshStandardMaterial({ color: 0xc47a2e });
+    const headTopMat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+    const noseMat = new THREE.MeshStandardMaterial({ color: 0x3d2b1f });
+    const wingMat = new THREE.MeshStandardMaterial({ color: 0xffd700 });
+    const wingDotMat = new THREE.MeshStandardMaterial({ color: 0x2244aa });
+
+    // Body
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.4, 1.6), bodyMat);
+    body.castShadow = true;
+    dog.add(body);
+
+    // Head
+    const head = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.2, 1.3), bodyLightMat);
+    head.position.set(1.55, 0.3, 0);
+    head.castShadow = true;
+    dog.add(head);
+
+    // Head top (dark cap)
+    const headTop = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.3, 1.3), headTopMat);
+    headTop.position.set(1.55, 0.9, 0);
+    headTop.castShadow = true;
+    dog.add(headTop);
+
+    // Eyes
+    const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.1), eyeMat);
+    eyeL.position.set(2.1, 0.4, 0.32);
+    dog.add(eyeL);
+    const eyeR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.1), eyeMat);
+    eyeR.position.set(2.1, 0.4, -0.32);
+    dog.add(eyeR);
+
+    // Eye whites
+    const eyeWMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    const ewL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.05), eyeWMat);
+    ewL.position.set(2.13, 0.5, 0.38);
+    dog.add(ewL);
+    const ewR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.05), eyeWMat);
+    ewR.position.set(2.13, 0.5, -0.25);
+    dog.add(ewR);
+
+    // Nose
+    const nose = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.18, 0.25), noseMat);
+    nose.position.set(2.15, 0.1, 0);
+    dog.add(nose);
+
+    // Mouth
+    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.4), noseMat);
+    mouth.position.set(2.12, -0.02, 0);
+    dog.add(mouth);
+
+    // Ears
+    const earGeom = new THREE.BoxGeometry(0.35, 0.55, 0.3);
+    const earL2 = new THREE.Mesh(earGeom, headTopMat);
+    earL2.position.set(1.35, 1.15, 0.35);
+    earL2.rotation.z = 0.15;
+    earL2.castShadow = true;
+    dog.add(earL2);
+    const earR2 = new THREE.Mesh(earGeom, headTopMat);
+    earR2.position.set(1.35, 1.15, -0.35);
+    earR2.rotation.z = -0.15;
+    earR2.castShadow = true;
+    dog.add(earR2);
+
+    // Legs with pivots
+    const legGeom = new THREE.BoxGeometry(0.4, 0.9, 0.4);
+    [
+        { name: 'FL', x: 0.8, z: 0.5 },
+        { name: 'FR', x: 0.8, z: -0.5 },
+        { name: 'BL', x: -0.8, z: 0.5 },
+        { name: 'BR', x: -0.8, z: -0.5 }
+    ].forEach(lp => {
+        const pivot = new THREE.Group();
+        pivot.position.set(lp.x, -0.7, lp.z);
+        const leg = new THREE.Mesh(legGeom, bodyMat);
+        leg.position.y = -0.45;
+        leg.castShadow = true;
+        pivot.add(leg);
+        dog.add(pivot);
+        pivots['leg' + lp.name] = pivot;
+    });
+
+    // Tail
+    const tailPivot = new THREE.Group();
+    tailPivot.position.set(-1.2, 0, 0);
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, 0.2), bodyMat);
+    tail.position.set(0, -0.35, 0);
+    tail.castShadow = true;
+    tailPivot.add(tail);
+    dog.add(tailPivot);
+    pivots.tail = tailPivot;
+
+    // Wings
+    function buildWing(side, zOffset, zDir) {
+        const pivot = new THREE.Group();
+        pivot.position.set(-0.2, 0.5, zOffset);
+
+        const wing = new THREE.Group();
+
+        const plane = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.1, 1.5), wingMat);
+        plane.position.set(0, 0, 0.75 * zDir);
+        plane.castShadow = true;
+        wing.add(plane);
+
+        const tip = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.1, 0.5), wingMat);
+        tip.position.set(0, 0, 1.6 * zDir);
+        wing.add(tip);
+
+        for (let col = -0.6; col <= 0.6; col += 0.6) {
+            for (let row = 0; row < 2; row++) {
+                const dot = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.25, 0.14, 0.25),
+                    wingDotMat
+                );
+                dot.position.set(col, 0.07, (0.4 + row * 0.55) * zDir);
+                wing.add(dot);
+            }
+        }
+
+        pivot.add(wing);
+        dog.add(pivot);
+        pivots['wing' + side] = pivot;
+    }
+
+    buildWing('L', 0.8, 1);
+    buildWing('R', -0.8, -1);
+
+    // Position: feet on ground
+    dog.position.set(0, 1.6, 0);
+    scene.add(dog);
+
+    // ===== CONTROLS =====
+    let animMode = 'idle', autoSpin = true;
+    let dragAngle = 0, dragging = false;
+
+    function setAnim(m) {
+        animMode = m;
+        document.querySelectorAll('#btns button:not(#bSpin)').forEach(b => b.classList.remove('on'));
+        document.getElementById('b' + m[0].toUpperCase() + m.slice(1)).classList.add('on');
+    }
+    function toggleSpin() {
+        autoSpin = !autoSpin;
+        document.getElementById('bSpin').classList.toggle('on', autoSpin);
+    }
+
+    renderer.domElement.addEventListener('mousedown', () => { dragging = true; });
+    document.addEventListener('mouseup', () => { dragging = false; });
+    document.addEventListener('mousemove', e => {
+        if (dragging) dragAngle -= e.movementX * 0.01;
+    });
+    window.addEventListener('resize', () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+    });
+
+    // ===== ANIMATION (exact copy from dog.js) =====
+    const clock = new THREE.Clock();
+    let t = 0;
+
+    function loop() {
+        requestAnimationFrame(loop);
+        const dt = Math.min(clock.getDelta(), 0.05);
+        t += dt;
+
+        if (autoSpin) dog.rotation.y += dt * 0.5;
+        else dog.rotation.y = dragAngle;
+
+        const isMoving = (animMode === 'walk');
+        const flying = (animMode === 'fly');
+
+        // Legs
+        if (isMoving) {
+            const a = Math.sin(t * 10) * 0.5;
+            pivots.legFL.rotation.z = a;
+            pivots.legBR.rotation.z = a;
+            pivots.legFR.rotation.z = -a;
+            pivots.legBL.rotation.z = -a;
+        } else if (flying) {
+            pivots.legFL.rotation.z = 0.3;
+            pivots.legFR.rotation.z = 0.3;
+            pivots.legBL.rotation.z = -0.3;
+            pivots.legBR.rotation.z = -0.3;
+        } else {
+            ['legFL', 'legFR', 'legBL', 'legBR'].forEach(k => {
+                pivots[k].rotation.z *= 0.9;
+            });
+        }
+
+        // Wings
+        if (flying) {
+            const wa = Math.sin(t * 12) * 0.5;
+            pivots.wingL.rotation.x = wa;
+            pivots.wingR.rotation.x = -wa;
+        } else {
+            const ra = Math.sin(t * 2) * 0.03;
+            pivots.wingL.rotation.x = ra;
+            pivots.wingR.rotation.x = -ra;
+        }
+
+        // Tail wag
+        pivots.tail.rotation.z = Math.sin(t * 6) * 0.35;
+        pivots.tail.rotation.x = -0.2 + Math.sin(t * 3) * 0.1;
+
+        // Body bob when walking
+        if (isMoving) {
+            const bob = Math.sin(t * 20) * 0.05;
+            body.position.y = bob;
+            head.position.y = 0.3 + bob;
+        }
+
+        renderer.render(scene, camera);
+    }
+    loop();
+    </script>
+</body>
+</html>

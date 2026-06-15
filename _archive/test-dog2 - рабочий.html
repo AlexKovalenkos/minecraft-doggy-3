@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Тёпа — Dog v3</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { overflow: hidden; background: #f0c4de; }
+        canvas { display: block; }
+        #info {
+            position: fixed; top: 10px; left: 10px;
+            color: #fff; font: 13px monospace;
+            background: rgba(0,0,0,0.5); padding: 8px 12px;
+            border-radius: 8px; z-index: 10;
+        }
+        #btns {
+            position: fixed; bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            display: flex; gap: 10px; z-index: 10;
+        }
+        #btns button {
+            padding: 8px 20px; font-size: 14px;
+            background: linear-gradient(135deg, #ff69b4, #ffd700);
+            color: #fff; border: none; border-radius: 15px;
+            cursor: pointer; font-weight: bold;
+        }
+        #btns button.on { box-shadow: 0 0 10px #fff; }
+    </style>
+</head>
+<body>
+    <div id="info">Тёпа v3 | Drag to rotate</div>
+    <div id="btns">
+        <button id="bIdle" class="on" onclick="setAnim('idle')">Idle</button>
+        <button id="bWalk" onclick="setAnim('walk')">Walk</button>
+        <button id="bFly" onclick="setAnim('fly')">Fly</button>
+        <button id="bSpin" class="on" onclick="toggleSpin()">Auto-Spin</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script>
+    // ===== SCENE =====
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf0c4de);
+
+    const camera = new THREE.PerspectiveCamera(40, innerWidth / innerHeight, 0.1, 100);
+    camera.position.set(7, 4.5, 9);
+    camera.lookAt(0, 1.2, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0xffd4e8, 0.8));
+    const sun = new THREE.DirectionalLight(0xfff5e0, 1.2);
+    sun.position.set(5, 10, 5);
+    sun.castShadow = true;
+    scene.add(sun);
+    const fill = new THREE.DirectionalLight(0xffe0f0, 0.4);
+    fill.position.set(-4, 6, -4);
+    scene.add(fill);
+
+    const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(20, 20),
+        new THREE.MeshStandardMaterial({ color: 0xf4a7c8 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // ===== DOG v3 =====
+    const PX = 0.25;
+    const dog = new THREE.Group();
+    const piv = {};
+
+    function mt(c) { return new THREE.MeshStandardMaterial({ color: c }); }
+    function bx(w, h, d, m) {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+        mesh.castShadow = true;
+        return mesh;
+    }
+
+    const C = {
+        b1: mt(0xC9A06F),
+        b2: mt(0xAD8050),
+        b3: mt(0x8B5E30),
+        b4: mt(0x6B3A1A),
+        cap: mt(0x5C3320),
+        face: mt(0xA07550),
+        snout: mt(0xBB8E5E),
+        eye: mt(0x111111),
+        eyeH: mt(0xFFFFFF),
+        nose: mt(0x1A0A00),
+        wY: mt(0xE8C028),
+        wD: mt(0x1B3A7A),
+        leg: mt(0x8B5E30),
+        tail: mt(0x6B3A1A),
+    };
+
+    // ──── BODY: 10×4×4, 4 stripes ────
+    const bMats = [C.b1, C.b2, C.b3, C.b4];
+    const bMesh = [];
+    for (let i = 0; i < 4; i++) {
+        const s = bx(10 * PX, 1 * PX, 4 * PX, bMats[i]);
+        s.position.set(0, (-1.5 + i) * PX, 0);
+        dog.add(s);
+        bMesh.push(s);
+    }
+
+    // ──── HEAD: 3×4×4, at front ────
+    const hx = 5 * PX + 1.5 * PX;
+
+    const faceM = bx(3 * PX, 2 * PX, 4 * PX, C.face);
+    faceM.position.set(hx, 1 * PX, 0);
+    dog.add(faceM);
+
+    const capM = bx(3 * PX, 2 * PX, 4 * PX, C.cap);
+    capM.position.set(hx, 3 * PX, 0);
+    dog.add(capM);
+
+    const snM = bx(0.05, 1 * PX, 1.2 * PX, C.snout);
+    snM.position.set(hx + 1.5 * PX, 0.5 * PX, 0);
+    dog.add(snM);
+
+    // ──── EYES: big, HIGH on face, with highlights ────
+    const eF = hx + 1.5 * PX + 0.01;
+    const eS = 1.1 * PX;
+
+    const eyL = bx(0.12, eS, eS, C.eye);
+    eyL.position.set(eF, 1.6 * PX, 0.75 * PX);
+    dog.add(eyL);
+
+    const eyR = bx(0.12, eS, eS, C.eye);
+    eyR.position.set(eF, 1.6 * PX, -0.75 * PX);
+    dog.add(eyR);
+
+    const hlS = 0.3 * PX;
+    const hlL = bx(0.06, hlS, hlS, C.eyeH);
+    hlL.position.set(eF + 0.02, 1.9 * PX, 1.05 * PX);
+    dog.add(hlL);
+    const hlR = bx(0.06, hlS, hlS, C.eyeH);
+    hlR.position.set(eF + 0.02, 1.9 * PX, -0.45 * PX);
+    dog.add(hlR);
+
+    // ──── NOSE: 3D snout sticking out ────
+    // Muzzle bump (lighter, protruding)
+    const muzzleB = bx(1 * PX, 1 * PX, 1.5 * PX, C.snout);
+    muzzleB.position.set(hx + 1.5 * PX + 0.5 * PX, 0.5 * PX, 0);
+    dog.add(muzzleB);
+    // Dark nose tip on front of muzzle
+    const noseM = bx(0.12, 0.4 * PX, 0.5 * PX, C.nose);
+    noseM.position.set(hx + 1.5 * PX + 1 * PX + 0.01, 0.7 * PX, 0);
+    dog.add(noseM);
+
+    // ──── SMILE on muzzle tip ────
+    const smF = hx + 1.5 * PX + 1 * PX + 0.01;
+    const smT = 0.06;
+    const smW = 0.3 * PX;
+    const smL = bx(smT, smT, smW, C.nose);
+    smL.position.set(smF, 0.2 * PX, 0.15 * PX);
+    smL.rotation.x = 0.4;
+    dog.add(smL);
+    const smR = bx(smT, smT, smW, C.nose);
+    smR.position.set(smF, 0.2 * PX, -0.15 * PX);
+    smR.rotation.x = -0.4;
+    dog.add(smR);
+
+    // ──── EARS: hanging DOWN from head sides ────
+    const earL = bx(1 * PX, 2 * PX, 1 * PX, C.cap);
+    earL.position.set(hx, 2.5 * PX, 2.3 * PX);
+    earL.rotation.x = -0.3;
+    dog.add(earL);
+    const earR = bx(1 * PX, 2 * PX, 1 * PX, C.cap);
+    earR.position.set(hx, 2.5 * PX, -2.3 * PX);
+    earR.rotation.x = 0.3;
+    dog.add(earR);
+
+    // ──── LEGS: 1×3×1, walk FORWARD (rotation.z) ────
+    const legG = new THREE.BoxGeometry(1 * PX, 3 * PX, 1 * PX);
+    [
+        { n: 'FL', x: 3.5, z: 1.2 },
+        { n: 'FR', x: 3.5, z: -1.2 },
+        { n: 'BL', x: -3.5, z: 1.2 },
+        { n: 'BR', x: -3.5, z: -1.2 },
+    ].forEach(d => {
+        const p = new THREE.Group();
+        p.position.set(d.x * PX, -2 * PX, d.z * PX);
+        const leg = new THREE.Mesh(legG, C.leg);
+        leg.position.y = -1.5 * PX;
+        leg.castShadow = true;
+        p.add(leg);
+        dog.add(p);
+        piv['leg' + d.n] = p;
+    });
+
+    // ──── TAIL: solid curved piece, touches body ────
+    const tailP = new THREE.Group();
+    tailP.position.set(-5 * PX, 1 * PX, 0);
+
+    // 3 overlapping segments forming a curve
+    const tS = [
+        { w: 0.7, h: 1.3, x: 0, y: 0.4, r: 0.2 },
+        { w: 0.6, h: 1.3, x: -0.5, y: 1.4, r: 0.6 },
+        { w: 0.5, h: 1.0, x: -1.2, y: 2.1, r: 1.0 },
+    ];
+    tS.forEach(s => {
+        const seg = bx(s.w * PX, s.h * PX, 0.6 * PX, C.tail);
+        seg.position.set(s.x * PX, s.y * PX, 0);
+        seg.rotation.z = s.r;
+        tailP.add(seg);
+    });
+    dog.add(tailP);
+    piv.tail = tailP;
+
+    // ──── WINGS: butterfly style ────
+    // Flat panels in YZ plane (thin in X)
+    // Extend UPWARD from body top and OUTWARD to sides
+    // Pivot at body top-edge — wings never intersect body
+
+    const wingThick = 0.2 * PX;
+    const wingGap = 0.3; // gap from body edge to prevent clipping
+
+    function buildWing(side, zs) {
+        const wp = new THREE.Group();
+        // Pivot at body TOP side edge
+        wp.position.set(0.5 * PX, 2 * PX, 2 * PX * zs);
+
+        const wg = new THREE.Group();
+
+        // Diamond in YZ: extends UP (Y+) and OUT (Z away from body)
+        // [yOffset from pivot, widthInZ_blocks]
+        const rows = [
+            [3, 1],     // top tip
+            [2, 3],     // upper
+            [1, 4],     // widest
+            [0, 3],     // base at body top level
+        ];
+
+        rows.forEach(([y, w]) => {
+            const block = bx(wingThick, 1 * PX, w * PX, C.wY);
+            // Inner edge at wingGap from pivot, extends outward
+            block.position.set(0, y * PX, (w / 2 + wingGap) * PX * zs);
+            wg.add(block);
+        });
+
+        // Blue dots on front face (+X side) of wing
+        const ds = 0.4 * PX;
+        const dt = 0.08 * PX;
+        const dotX = wingThick / 2 + 0.005;
+
+        // 6 dots scattered on wing surface
+        const dotPts = [
+            [0.5, 1.0], [0.5, 2.3],
+            [1.5, 1.3], [1.5, 3.0],
+            [2.5, 1.2], [2.5, 2.3],
+        ];
+        dotPts.forEach(([dy, dz]) => {
+            const dot = bx(dt, ds, ds, C.wD);
+            dot.position.set(dotX, dy * PX, dz * PX * zs);
+            wg.add(dot);
+        });
+
+        wp.add(wg);
+        dog.add(wp);
+        piv['wing' + side] = wp;
+    }
+
+    buildWing('L', 1);
+    buildWing('R', -1);
+
+    // ──── Position: feet on ground ────
+    // Leg bottom: -2*PX (pivot) - 3*PX (leg) = -5*PX
+    dog.position.set(0, 5 * PX, 0);
+    scene.add(dog);
+
+    // ===== CONTROLS =====
+    let animMode = 'idle', autoSpin = true;
+    let dragAngle = 0, dragging = false;
+
+    function setAnim(m) {
+        animMode = m;
+        document.querySelectorAll('#btns button:not(#bSpin)').forEach(b => b.classList.remove('on'));
+        document.getElementById('b' + m[0].toUpperCase() + m.slice(1)).classList.add('on');
+    }
+    function toggleSpin() {
+        autoSpin = !autoSpin;
+        document.getElementById('bSpin').classList.toggle('on', autoSpin);
+    }
+
+    renderer.domElement.addEventListener('mousedown', () => { dragging = true; });
+    document.addEventListener('mouseup', () => { dragging = false; });
+    document.addEventListener('mousemove', e => {
+        if (dragging) dragAngle -= e.movementX * 0.01;
+    });
+    window.addEventListener('resize', () => {
+        camera.aspect = innerWidth / innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+    });
+
+    // ===== ANIMATION =====
+    const clock = new THREE.Clock();
+    let t = 0;
+
+    function loop() {
+        requestAnimationFrame(loop);
+        const dt = Math.min(clock.getDelta(), 0.05);
+        t += dt;
+
+        if (autoSpin) dog.rotation.y += dt * 0.5;
+        else dog.rotation.y = dragAngle;
+
+        if (animMode === 'walk') {
+            // Legs walk FORWARD-BACKWARD (rotation.z)
+            const a = Math.sin(t * 10) * 0.4;
+            piv.legFL.rotation.z = a;
+            piv.legBR.rotation.z = a;
+            piv.legFR.rotation.z = -a;
+            piv.legBL.rotation.z = -a;
+            // Subtle wing sway
+            piv.wingL.rotation.x = Math.sin(t * 2) * 0.03;
+            piv.wingR.rotation.x = -Math.sin(t * 2) * 0.03;
+            // Body bob
+            const bob = Math.sin(t * 20) * 0.015;
+            bMesh.forEach((m, i) => { m.position.y = (-1.5 + i) * PX + bob; });
+        } else if (animMode === 'fly') {
+            // Legs tucked
+            piv.legFL.rotation.z = 0.2;
+            piv.legFR.rotation.z = 0.2;
+            piv.legBL.rotation.z = -0.2;
+            piv.legBR.rotation.z = -0.2;
+            // Wing flap
+            const wa = Math.sin(t * 12) * 0.5;
+            piv.wingL.rotation.x = wa;
+            piv.wingR.rotation.x = -wa;
+        } else {
+            // Idle: legs settle
+            ['legFL', 'legFR', 'legBL', 'legBR'].forEach(k => {
+                piv[k].rotation.z *= 0.9;
+            });
+            piv.wingL.rotation.x = Math.sin(t * 2) * 0.03;
+            piv.wingR.rotation.x = -Math.sin(t * 2) * 0.03;
+        }
+
+        // Tail gentle wag
+        piv.tail.rotation.z = Math.sin(t * 5) * 0.15;
+
+        renderer.render(scene, camera);
+    }
+    loop();
+    </script>
+</body>
+</html>

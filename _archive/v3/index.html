@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Супер Тёпа</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { overflow: hidden; background: #f0c4de; font-family: 'Segoe UI', Arial, sans-serif; }
+        canvas { display: block; }
+
+        #ui {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+        }
+
+        .crosshair {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 24px; height: 24px; display: none;
+        }
+        .crosshair::before, .crosshair::after {
+            content: ''; position: absolute;
+            background: rgba(255,255,255,0.8); border-radius: 1px;
+        }
+        .crosshair::before { width: 2px; height: 100%; left: 50%; transform: translateX(-50%); }
+        .crosshair::after { width: 100%; height: 2px; top: 50%; transform: translateY(-50%); }
+
+        .hud {
+            position: absolute; top: 15px; left: 50%;
+            transform: translateX(-50%);
+            display: none; gap: 20px;
+            background: rgba(255, 182, 213, 0.7);
+            padding: 8px 20px; border-radius: 20px;
+            border: 2px solid rgba(255,255,255,0.5);
+        }
+        .hud-item { text-align: center; color: #6b3a5e; }
+        .hud-item .value { font-size: 22px; font-weight: bold; }
+        .hud-item .label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; }
+        .bones .value { color: #fff; }
+        .height-info .value { color: #9b59b6; }
+        .tamed .value { color: #e74c8b; }
+
+        .hotbar {
+            position: absolute; bottom: 15px; left: 50%;
+            transform: translateX(-50%);
+            display: none; gap: 4px;
+            background: rgba(255, 182, 213, 0.6);
+            padding: 6px; border-radius: 12px;
+            border: 2px solid rgba(255,255,255,0.4);
+        }
+        .hotbar-slot {
+            width: 48px; height: 48px;
+            border: 2px solid rgba(255,255,255,0.5);
+            border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            position: relative;
+        }
+        .hotbar-slot.active { border-color: #fff; background: rgba(255,255,255,0.3); }
+        .hotbar-slot .block-preview { width: 30px; height: 30px; border-radius: 3px; }
+        .hotbar-slot .key-hint {
+            position: absolute; top: 2px; right: 4px;
+            font-size: 9px; color: rgba(255,255,255,0.8); font-weight: bold;
+        }
+
+        .hint {
+            position: absolute; bottom: 80px; left: 50%;
+            transform: translateX(-50%);
+            color: #fff; font-size: 14px;
+            background: rgba(107, 58, 94, 0.7);
+            padding: 6px 14px; border-radius: 10px;
+            display: none; white-space: nowrap;
+        }
+
+        #startScreen {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: linear-gradient(135deg, #f8b4d9 0%, #fde68a 50%, #f9a8d4 100%);
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            z-index: 100; pointer-events: all;
+        }
+        #startScreen h1 {
+            font-size: 52px; color: #fff;
+            text-shadow: 3px 3px 0 #e74c8b, 6px 6px 0 rgba(0,0,0,0.1);
+            margin-bottom: 8px;
+        }
+        #startScreen .subtitle { font-size: 16px; color: #b45e8a; margin-bottom: 30px; }
+        #startScreen .controls-info {
+            background: rgba(255,255,255,0.4);
+            padding: 15px 30px; border-radius: 15px; margin-bottom: 25px;
+        }
+        #startScreen p { color: #6b3a5e; margin: 4px 0; font-size: 13px; }
+        .key { color: #e74c8b; font-weight: bold; }
+
+        #startBtn {
+            padding: 14px 50px; font-size: 18px;
+            background: linear-gradient(135deg, #ff69b4, #ffd700);
+            color: #fff; border: none; border-radius: 30px;
+            cursor: pointer; pointer-events: all; font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+            box-shadow: 0 4px 15px rgba(255,105,180,0.4);
+            transition: transform 0.2s;
+        }
+        #startBtn:hover { transform: scale(1.05); }
+
+        .message {
+            position: absolute; top: 35%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff; font-size: 20px; font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            opacity: 0; transition: opacity 0.3s; pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div class="crosshair" id="crosshair"></div>
+        <div class="hud" id="hud">
+            <div class="hud-item bones"><div class="value" id="boneCount">0</div><div class="label">Косточки</div></div>
+            <div class="hud-item tamed"><div class="value" id="tamedCount">0</div><div class="label">Друзья</div></div>
+            <div class="hud-item height-info"><div class="value" id="heightVal">0</div><div class="label">Высота</div></div>
+        </div>
+        <div class="hotbar" id="hotbar">
+            <div class="hotbar-slot active" data-slot="0"><div class="block-preview" style="background:#ff69b4"></div><span class="key-hint">1</span></div>
+            <div class="hotbar-slot" data-slot="1"><div class="block-preview" style="background:#ffd700"></div><span class="key-hint">2</span></div>
+            <div class="hotbar-slot" data-slot="2"><div class="block-preview" style="background:#87ceeb"></div><span class="key-hint">3</span></div>
+            <div class="hotbar-slot" data-slot="3"><div class="block-preview" style="background:#fff"></div><span class="key-hint">4</span></div>
+            <div class="hotbar-slot" data-slot="4"><div class="block-preview" style="background:#c48a5c"></div><span class="key-hint">5</span></div>
+        </div>
+        <div class="hint" id="hint"></div>
+        <div class="message" id="message"></div>
+        <div id="startScreen">
+            <h1>СУПЕР ТЁПА</h1>
+            <div class="subtitle">Летающий пёсик на волшебной полянке</div>
+            <div class="controls-info">
+                <p><span class="key">W A S D</span> — Бегать</p>
+                <p><span class="key">Мышь / Тачпад</span> — Поворачивать Тёпу</p>
+                <p><span class="key">ПРОБЕЛ</span> — Летать вверх</p>
+                <p><span class="key">SHIFT</span> — Спуститься</p>
+                <p><span class="key">E</span> — Приручить единорожка</p>
+                <p><span class="key">Q</span> — Гавкнуть</p>
+                <p><span class="key">1-5</span> — Выбрать блок</p>
+                <p><span class="key">Z</span> — Поставить блок &nbsp; <span class="key">X</span> — Убрать блок</p>
+            </div>
+            <button id="startBtn">ИГРАТЬ!</button>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="js/game.js?v=3"></script>
+    <script src="js/sounds.js?v=3"></script>
+    <script src="js/dog.js?v=3"></script>
+    <script src="js/world.js?v=3"></script>
+    <script src="js/npcs.js?v=3"></script>
+    <script src="js/items.js?v=3"></script>
+    <script src="js/effects.js?v=3"></script>
+    <script src="js/controls.js?v=3"></script>
+    <script src="js/save.js?v=3"></script>
+    <script src="js/main.js?v=3"></script>
+</body>
+</html>
