@@ -126,7 +126,7 @@ const Achievements = {
         ride_dragon:   { icon:'🐉', text:'Покоритель дракона!', cond: () => !!Dog.ridingDragon },
         reach_castle:  { icon:'🏰', text:'Замок найден!',     cond: () => {
             const p = Dog.group.position;
-            return Math.sqrt((p.x-0)**2+(p.z-32)**2) < 24;
+            return Math.sqrt((p.x-0)**2+(p.z-72)**2) < 28;
         }},
         fly_high:      { icon:'✈️', text:'Высоко лечу!',      cond: () => Dog.group.position.y > 18 },
         throne:        { icon:'👑', text:'Восседаю на троне!', cond: () => Dog.onThrone },

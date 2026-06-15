@@ -89,37 +89,66 @@
             text-shadow: 1px 1px 0 #000;
         }
 
-        /* Start screen — Minecraft title screen style */
+        /* Start screen — Minecraft panorama-inspired title screen */
         #startScreen {
             position: fixed; top: 0; left: 0;
             width: 100%; height: 100%;
-            background: #7DC5F9;
+            background:
+                linear-gradient(180deg, rgba(107,170,235,0.98) 0%, rgba(184,221,255,0.92) 38%, rgba(78,130,58,0.98) 39%, rgba(44,92,40,1) 100%);
             display: flex; flex-direction: column;
             justify-content: center; align-items: center;
             z-index: 100; pointer-events: all;
+        }
+        #startScreen::before {
+            content: '';
+            position: absolute; inset: 0;
+            background:
+                linear-gradient(135deg, transparent 0 63%, rgba(255,255,255,0.18) 64% 66%, transparent 67%) 15% 18% / 180px 50px,
+                linear-gradient(135deg, transparent 0 63%, rgba(255,255,255,0.14) 64% 66%, transparent 67%) 72% 13% / 220px 60px,
+                repeating-linear-gradient(90deg, transparent 0 36px, rgba(35,78,34,0.14) 36px 40px) 0 61% / 100% 180px,
+                repeating-linear-gradient(0deg, rgba(80,145,50,0.16) 0 28px, rgba(46,102,38,0.20) 28px 56px) 0 62% / 100% 170px;
+            background-repeat: no-repeat, no-repeat, repeat, repeat;
+            opacity: 0.42;
+            pointer-events: none;
         }
         /* Panorama-like dirt/grass strip at bottom */
         #startScreen::after {
             content: '';
             position: absolute; bottom: 0; left: 0; right: 0;
-            height: 80px;
-            background: repeating-linear-gradient(90deg, #5a9a40 0px, #5a9a40 32px, #4a8a35 32px, #4a8a35 64px);
+            height: 96px;
+            background:
+                repeating-linear-gradient(90deg, #5a9a40 0px, #5a9a40 32px, #4a8a35 32px, #4a8a35 64px),
+                linear-gradient(#8B6543, #65432C);
+            border-top: 6px solid #3d7f26;
         }
         #startScreen h1 {
-            font-size: 36px; color: #ffff55;
-            text-shadow: 3px 3px 0 #555500, 4px 4px 0 rgba(0,0,0,0.7);
-            margin-bottom: 6px;
-            letter-spacing: 2px;
+            position: relative;
+            font-size: 58px; color: #f7f7f7;
+            text-shadow:
+                3px 3px 0 #1c1c1c,
+                6px 6px 0 #3f3f3f,
+                9px 9px 0 rgba(0,0,0,0.55),
+                0 -3px 0 #ffffff,
+                0 3px 0 #9a9a9a;
+            margin-bottom: 10px;
+            letter-spacing: 0;
+            transform: perspective(320px) rotateX(6deg);
+        }
+        @media (max-width: 700px) {
+            #startScreen h1 { font-size: 36px; }
         }
         #startScreen .subtitle {
-            font-size: 9px; color: #55ffff;
-            margin-bottom: 36px;
-            text-shadow: 1px 1px 0 #000;
+            position: relative;
+            font-size: 9px; color: #ffff55;
+            margin-bottom: 32px;
+            text-shadow: 2px 2px 0 #000;
         }
         #startScreen .controls-info {
-            background: rgba(0,0,0,0.5);
+            position: relative;
+            background: rgba(18,18,18,0.68);
             padding: 16px 28px;
-            border: 2px solid #555;
+            border: 3px solid #2b2b2b;
+            box-shadow: inset 0 0 0 2px #777, 8px 8px 0 rgba(0,0,0,0.35);
             margin-bottom: 28px;
         }
         #startScreen p { color: #ffffff; margin: 5px 0; font-size: 8px; text-shadow: 1px 1px 0 #000; }
@@ -127,17 +156,19 @@
 
         /* MC button style */
         #startBtn {
+            position: relative;
             padding: 12px 40px; font-size: 12px;
-            background: #5a7a5a;
+            background: #6a6a6a;
             color: #ffffff; border: none;
-            border-top: 2px solid #8aaa8a;
-            border-left: 2px solid #8aaa8a;
-            border-right: 2px solid #2a4a2a;
-            border-bottom: 2px solid #2a4a2a;
+            border-top: 3px solid #bdbdbd;
+            border-left: 3px solid #bdbdbd;
+            border-right: 3px solid #2a2a2a;
+            border-bottom: 3px solid #2a2a2a;
             cursor: pointer; pointer-events: all;
-            text-shadow: 1px 1px 0 #000;
+            text-shadow: 2px 2px 0 #000;
             letter-spacing: 1px;
             transition: filter 0.1s;
+            box-shadow: 5px 5px 0 rgba(0,0,0,0.35);
         }
         #startBtn:hover { filter: brightness(1.25); }
         #startBtn:active { filter: brightness(0.85); }
@@ -230,16 +261,16 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-    <script src="js/version.js?v=0.8.3"></script>
-    <script src="js/game.js?v=0.8.3"></script>
-    <script src="js/sounds.js?v=0.8.3"></script>
-    <script src="js/dog.js?v=0.8.3"></script>
-    <script src="js/world.js?v=0.8.3"></script>
-    <script src="js/npcs.js?v=0.8.3"></script>
-    <script src="js/items.js?v=0.8.3"></script>
-    <script src="js/effects.js?v=0.8.3"></script>
-    <script src="js/controls.js?v=0.8.3"></script>
-    <script src="js/save.js?v=0.8.3"></script>
-    <script src="js/main.js?v=0.8.3"></script>
+    <script src="js/version.js?v=0.9-dogi4e"></script>
+    <script src="js/game.js?v=0.9-dogi4e"></script>
+    <script src="js/sounds.js?v=0.9-dogi4e"></script>
+    <script src="js/dog.js?v=0.9-dogi4e"></script>
+    <script src="js/world.js?v=0.9-dogi4e"></script>
+    <script src="js/npcs.js?v=0.9-dogi4e"></script>
+    <script src="js/items.js?v=0.9-dogi4e"></script>
+    <script src="js/effects.js?v=0.9-dogi4e"></script>
+    <script src="js/controls.js?v=0.9-dogi4e"></script>
+    <script src="js/save.js?v=0.9-dogi4e"></script>
+    <script src="js/main.js?v=0.9-dogi4e"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@
 
 const Controls = {
     keys: {},
-    cameraPitch: 0.3,
+    cameraPitch: 0.24,
     selectedSlot: 0,
     _camTarget: new THREE.Vector3(),
     _lookTarget: new THREE.Vector3(0, 2.6, 0),
@@ -143,12 +143,12 @@ const Controls = {
             const lookAhead = 10;
             GAME.camera.lookAt(
                 Dog.group.position.x + Math.sin(Dog.yaw) * lookAhead,
-                Dog.group.position.y + 2.4,
+                Dog.group.position.y + 3.4,
                 Dog.group.position.z + Math.cos(Dog.yaw) * lookAhead
             );
             this._lookTarget.set(
                 Dog.group.position.x + Math.sin(Dog.yaw) * lookAhead,
-                Dog.group.position.y + 2.4,
+                Dog.group.position.y + 3.4,
                 Dog.group.position.z + Math.cos(Dog.yaw) * lookAhead
             );
         });
@@ -287,55 +287,51 @@ const Controls = {
         // === COLLISION DETECTION ===
         const dogRadius   = 0.8;
         const groundOffset = 1.6;
+        const dogTopOffset = 0.75;
+        const maxStepUp = Dog.onGround ? 1.15 : 0.65;
         let surfaceY = World.getTerrainY ? World.getTerrainY(pos.x, pos.z) : 0;
 
-        World.collidables.forEach(c => {
-            const box = c.box;
+        const resolveSolidBox = (box) => {
             const overlapX = pos.x + dogRadius > box.min.x && pos.x - dogRadius < box.max.x;
             const overlapZ = pos.z + dogRadius > box.min.z && pos.z - dogRadius < box.max.z;
-            if (overlapX && overlapZ) {
-                const dogFeetY = pos.y - groundOffset;
-                const dogTopY  = pos.y + 0.7;
-                if (Dog.vy <= 0 && dogFeetY <= box.max.y && dogFeetY >= box.max.y - 0.5) {
-                    if (box.max.y > surfaceY) surfaceY = box.max.y;
-                } else if (dogFeetY < box.max.y && dogTopY > box.min.y) {
-                    const pushRight = pos.x + dogRadius - box.min.x;
-                    const pushLeft  = box.max.x - (pos.x - dogRadius);
-                    const pushBack  = pos.z + dogRadius - box.min.z;
-                    const pushFront = box.max.z - (pos.z - dogRadius);
-                    const minPush = Math.min(pushLeft, pushRight, pushFront, pushBack);
-                    if (minPush === pushRight) pos.x = box.min.x - dogRadius;
-                    else if (minPush === pushLeft)  pos.x = box.max.x + dogRadius;
-                    else if (minPush === pushBack)  pos.z = box.min.z - dogRadius;
-                    else pos.z = box.max.z + dogRadius;
-                }
-            }
-        });
+            if (!overlapX || !overlapZ) return;
 
+            const dogFeetY = pos.y - groundOffset;
+            const dogTopY  = pos.y + dogTopOffset;
+            const topDelta = box.max.y - dogFeetY;
+
+            // Minecraft-like step-up: small ledges and floor slabs become ground.
+            if (Dog.vy <= 0 && topDelta <= 0.08 && topDelta >= -maxStepUp) {
+                if (box.max.y > surfaceY) surfaceY = box.max.y;
+                return;
+            }
+            if (Dog.vy <= 0 && topDelta > 0 && topDelta <= maxStepUp && dogTopY > box.max.y) {
+                if (box.max.y > surfaceY) surfaceY = box.max.y;
+                return;
+            }
+
+            // Tall/high solids: slide out horizontally on the smallest overlap axis.
+            if (dogFeetY < box.max.y - 0.05 && dogTopY > box.min.y + 0.05) {
+                const pushRight = pos.x + dogRadius - box.min.x;
+                const pushLeft  = box.max.x - (pos.x - dogRadius);
+                const pushBack  = pos.z + dogRadius - box.min.z;
+                const pushFront = box.max.z - (pos.z - dogRadius);
+                const minPush = Math.min(pushLeft, pushRight, pushFront, pushBack);
+                if (minPush === pushRight) pos.x = box.min.x - dogRadius;
+                else if (minPush === pushLeft)  pos.x = box.max.x + dogRadius;
+                else if (minPush === pushBack)  pos.z = box.min.z - dogRadius;
+                else pos.z = box.max.z + dogRadius;
+            }
+        };
+
+        World.collidables.forEach(c => resolveSolidBox(c.box));
         Items.placedBlocks.forEach(b => {
             const bPos = b.mesh.position;
             const half = GAME.BLOCK_SIZE / 2;
-            const bMin = { x: bPos.x-half, y: bPos.y-half, z: bPos.z-half };
-            const bMax = { x: bPos.x+half, y: bPos.y+half, z: bPos.z+half };
-            const overlapX = pos.x + dogRadius > bMin.x && pos.x - dogRadius < bMax.x;
-            const overlapZ = pos.z + dogRadius > bMin.z && pos.z - dogRadius < bMax.z;
-            if (overlapX && overlapZ) {
-                const dogFeetY = pos.y - groundOffset;
-                const dogTopY  = pos.y + 0.7;
-                if (Dog.vy <= 0 && dogFeetY <= bMax.y && dogFeetY >= bMax.y - 0.5) {
-                    if (bMax.y > surfaceY) surfaceY = bMax.y;
-                } else if (dogFeetY < bMax.y && dogTopY > bMin.y) {
-                    const pushRight = pos.x + dogRadius - bMin.x;
-                    const pushLeft  = bMax.x - (pos.x - dogRadius);
-                    const pushBack  = pos.z + dogRadius - bMin.z;
-                    const pushFront = bMax.z - (pos.z - dogRadius);
-                    const minPush = Math.min(pushLeft, pushRight, pushFront, pushBack);
-                    if (minPush === pushRight) pos.x = bMin.x - dogRadius;
-                    else if (minPush === pushLeft)  pos.x = bMax.x + dogRadius;
-                    else if (minPush === pushBack)  pos.z = bMin.z - dogRadius;
-                    else pos.z = bMax.z + dogRadius;
-                }
-            }
+            resolveSolidBox(new THREE.Box3(
+                new THREE.Vector3(bPos.x-half, bPos.y-half, bPos.z-half),
+                new THREE.Vector3(bPos.x+half, bPos.y+half, bPos.z+half)
+            ));
         });
 
         // Unicorn riding
@@ -482,7 +478,7 @@ const Controls = {
         const lookAhead = Dog.ridingDragon ? 18 : 10;
         this._lookGoal.set(
             pos.x + Math.sin(Dog.yaw) * lookAhead,
-            pos.y + (Dog.ridingDragon ? 4 : 2.4),
+            pos.y + (Dog.ridingDragon ? 4 : 3.4),
             pos.z + Math.cos(Dog.yaw) * lookAhead
         );
         this._lookTarget.lerp(this._lookGoal, smoothFactor);

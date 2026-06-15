@@ -13,8 +13,8 @@ const GAME = {
 
 // === SCENE ===
 GAME.scene = new THREE.Scene();
-GAME.scene.background = new THREE.Color(0x7DC5F9); // Minecraft sky blue
-GAME.scene.fog = new THREE.Fog(0xc0e8ff, 80, 260); // Linear fog like MC
+GAME.scene.background = new THREE.Color(0x8BC8FF); // bright shader-like MC sky
+GAME.scene.fog = new THREE.Fog(0xd6ecff, 95, 320); // soft panoramic distance haze
 
 // === CAMERA ===
 GAME.camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 500);
@@ -25,15 +25,19 @@ GAME.camera.lookAt(0, 1.6, 0);
 GAME.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 GAME.renderer.setSize(window.innerWidth, window.innerHeight);
 GAME.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+GAME.renderer.outputColorSpace = THREE.SRGBColorSpace;
+GAME.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+GAME.renderer.toneMappingExposure = 1.15;
 GAME.renderer.shadowMap.enabled = true;
 GAME.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(GAME.renderer.domElement);
 
 // === LIGHTING ===
-GAME.scene.add(new THREE.AmbientLight(0xffd4e8, 0.7));
+GAME.scene.add(new THREE.HemisphereLight(0xbfe6ff, 0x5f7f3a, 0.78));
+GAME.scene.add(new THREE.AmbientLight(0xfff1dd, 0.28));
 
-GAME.sun = new THREE.DirectionalLight(0xfff5e0, 1.2);
-GAME.sun.position.set(40, 80, 30);
+GAME.sun = new THREE.DirectionalLight(0xfff0c8, 1.65);
+GAME.sun.position.set(55, 95, 35);
 GAME.sun.castShadow = true;
 GAME.sun.shadow.mapSize.width = 2048;
 GAME.sun.shadow.mapSize.height = 2048;
@@ -48,8 +52,8 @@ GAME.sun.shadow.normalBias = 0.02;
 GAME.scene.add(GAME.sun);
 GAME.scene.add(GAME.sun.target);
 
-const fillLight = new THREE.DirectionalLight(0xffe0f0, 0.3);
-fillLight.position.set(-30, 20, -20);
+const fillLight = new THREE.DirectionalLight(0xb8d8ff, 0.35);
+fillLight.position.set(-45, 35, -30);
 GAME.scene.add(fillLight);
 
 // === RAINBOW ===
