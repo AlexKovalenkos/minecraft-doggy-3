@@ -77,30 +77,29 @@ const World = {
 
         this._hmap = hmap;
 
-        // ── Pixel textures ──────────────────────────────────────────
+        // ── Pixel textures (neutral white — colour via instanceColor) ─
+        // We use white textures and tint each block via setColorAt()
+        // so every block gets unique biome colour without grid uniformity
+
         const tGT = this._pixTex(16, (x, y) => {
-            const v = (Math.sin(x*3.7+y*2.3)*0.4 + Math.cos(x*1.1-y*3.9)*0.15 + 0.65) / 1.0;
-            const r = Math.max(0,Math.min(255, Math.round(86*v)));
-            const g = Math.max(0,Math.min(255, Math.round(158*v)));
-            const b = Math.max(0,Math.min(255, Math.round(44*v)));
-            return `rgb(${r},${g},${b})`;
+            // Grass top: pixel noise pattern, neutral so tint works cleanly
+            const v = Math.sin(x*3.7+y*2.3)*0.06 + Math.cos(x*1.9-y*4.1)*0.04 + 0.92;
+            const c = Math.round(255*v);
+            return `rgb(${c},${c},${c})`;
         });
         const tGS = this._pixTex(16, (x, y) => {
-            if (y < 3) {
-                const v = Math.sin(x*4.3)*0.15 + 0.85;
-                return `rgb(${Math.round(76*v)},${Math.round(142*v)},${Math.round(38*v)})`;
-            }
-            const v = Math.sin(x*2.9+y*1.3)*0.12 + 0.88;
-            return `rgb(${Math.round(129*v)},${Math.round(89*v)},${Math.round(56*v)})`;
+            // Grass side: top 3px lighter (grass), rest neutral dirt-ish
+            if (y < 3) { const v=Math.sin(x*4.1)*0.05+0.95; const c=Math.round(255*v); return `rgb(${c},${c},${c})`; }
+            const v = Math.sin(x*2.9+y*1.3)*0.06 + 0.82;
+            return `rgb(${Math.round(255*v)},${Math.round(215*v)},${Math.round(175*v)})`;
         });
         const tDirt = this._pixTex(16, (x, y) => {
-            const v = Math.sin(x*3.1+y*2.7)*0.1 + Math.cos(x*1.9-y*3.3)*0.08 + 0.88;
-            return `rgb(${Math.round(134*v)},${Math.round(92*v)},${Math.round(58*v)})`;
+            const v = Math.sin(x*3.1+y*2.7)*0.06 + 0.85;
+            return `rgb(${Math.round(255*v)},${Math.round(210*v)},${Math.round(165*v)})`;
         });
         const tStone = this._pixTex(16, (x, y) => {
-            const v = Math.sin(x*4.1+y*3.7)*0.08 + Math.cos(x*2.3-y*5.1)*0.07 + 0.87;
-            const c = Math.round(115*v);
-            return `rgb(${c},${c},${c+4})`;
+            const v = Math.sin(x*4.3+y*3.7)*0.07 + Math.cos(x*2.1-y*5.3)*0.05 + 0.88;
+            const c = Math.round(255*v); return `rgb(${c},${c},${c})`;
         });
         [tGT, tGS, tDirt, tStone].forEach(t => { t.wrapS = t.wrapT = THREE.RepeatWrapping; });
 
@@ -109,10 +108,37 @@ const World = {
         this._texDirt      = tDirt;
         this._texStone     = tStone;
 
-        // ── Base floor ──────────────────────────────────────────────
-        const floorM = new THREE.MeshStandardMaterial({ map: tGT });
+        // ── Base floor — biome-varied texture ───────────────────────
+        const tFloor = this._pixTex(128, (x, y) => {
+            const nx=x/128, ny=y/128;
+            const b = Math.sin(nx*9.1+ny*6.3+1.2)*0.35 + Math.cos(nx*5.7-ny*8.9)*0.30
+                    + Math.sin((nx+ny)*12)*0.12 + 0.52;
+            // dirt patches
+            if (Math.sin(nx*23+ny*17)*Math.cos(nx*11-ny*19) > 0.6) {
+                const v=0.78+Math.random()*0.08;
+                return `rgb(${Math.round(155*v)},${Math.round(110*v)},${Math.round(70*v)})`;
+            }
+            if (b < 0.22) { // dry savanna
+                const v=0.85+Math.random()*0.1;
+                return `rgb(${Math.round(175*v)},${Math.round(195*v)},${Math.round(75*v)})`;
+            } else if (b < 0.48) { // standard plains
+                const v=0.82+Math.random()*0.12;
+                return `rgb(${Math.round(88*v)},${Math.round(148*v)},${Math.round(48*v)})`;
+            } else if (b < 0.72) { // lush green
+                const v=0.80+Math.random()*0.12;
+                return `rgb(${Math.round(68*v)},${Math.round(138*v)},${Math.round(42*v)})`;
+            } else { // dark forest
+                const v=0.78+Math.random()*0.1;
+                return `rgb(${Math.round(52*v)},${Math.round(110*v)},${Math.round(32*v)})`;
+            }
+        });
+        tFloor.wrapS = tFloor.wrapT = THREE.RepeatWrapping;
+        tFloor.repeat.set(14, 14);
+        tFloor.magFilter = tFloor.minFilter = THREE.NearestFilter;
+
+        const floorM = new THREE.MeshStandardMaterial({ map: tFloor });
         const floor = new THREE.Mesh(
-            new THREE.PlaneGeometry(GRID*CELL + 60, GRID*CELL + 60), floorM
+            new THREE.PlaneGeometry(GRID*CELL + 80, GRID*CELL + 80), floorM
         );
         floor.rotation.x = -Math.PI/2;
         floor.position.y = -0.02;
@@ -120,35 +146,53 @@ const World = {
         GAME.scene.add(floor);
         GAME.ground = floor;
 
+        // ── Biome colour per grid cell ───────────────────────────────
+        // Returns THREE.Color for top face of block at (gx,gz,h)
+        const biomeCol = (gx, gz, h) => {
+            const nx = gx / GRID, nz = gz / GRID;
+            const bn = Math.sin(nx*4.7+nz*3.2+1.1)*0.38
+                     + Math.cos(nx*2.3-nz*5.1)*0.32
+                     + Math.sin((nx+nz)*7.8)*0.15;
+            const t = (bn + 0.85) / 1.70; // 0..1
+
+            // Height overrides
+            if (h >= 7) return new THREE.Color(0x909096); // stone
+            if (h >= 5) return new THREE.Color(0x5A6E48); // rocky mountain
+
+            // Per-block micro-variation (±5%)
+            const jitter = 1 + (Math.sin(gx*31.7+gz*17.3)*0.05);
+
+            let r, g, b;
+            if (t < 0.20) { r=0.72; g=0.78; b=0.28; }       // dry savanna
+            else if (t < 0.42) { r=0.38; g=0.62; b=0.20; }  // plains green
+            else if (t < 0.65) { r=0.27; g=0.55; b=0.17; }  // lush green
+            else { r=0.18; g=0.43; b=0.12; }                 // dark forest
+
+            return new THREE.Color(r*jitter, g*jitter, b*jitter);
+        };
+
         // ── Terrain block columns via InstancedMesh ─────────────────
         const cnt = new Array(MAX_H + 1).fill(0);
         for (let gx = 0; gx < GRID; gx++) for (let gz = 0; gz < GRID; gz++) cnt[hmap[gx][gz]]++;
 
         const dummy = new THREE.Object3D();
+        const tmpCol = new THREE.Color();
 
         for (let h = 1; h <= MAX_H; h++) {
             if (!cnt[h]) continue;
             const hW = h * BSIZE;
 
-            // Side texture: repeat V×h so bricks tile per block
-            const st = tGS.clone();
-            st.wrapT = THREE.RepeatWrapping;
-            st.repeat.set(1, h);
-            st.needsUpdate = true;
+            const useStone = h >= 6;
+            const topTex   = useStone ? tStone : tGT;
+            const sideTex  = (useStone ? tStone : tGS).clone();
+            sideTex.wrapT  = THREE.RepeatWrapping;
+            sideTex.repeat.set(1, h);
+            sideTex.needsUpdate = true;
 
-            // Stone for deeper layers when h >= 4
-            const useStoneSide = h >= 5;
-            const stoneT = tStone.clone();
-            stoneT.wrapT = THREE.RepeatWrapping;
-            stoneT.repeat.set(1, h - 2);
-            stoneT.needsUpdate = true;
-
-            const sideMat = new THREE.MeshStandardMaterial({ map: st });
-            const mats = [sideMat, sideMat,
-                new THREE.MeshStandardMaterial({ map: tGT }),
-                new THREE.MeshStandardMaterial({ map: tDirt }),
-                sideMat, sideMat
-            ];
+            const sideMat = new THREE.MeshStandardMaterial({ map: sideTex, vertexColors: false });
+            const topMat  = new THREE.MeshStandardMaterial({ map: topTex,  vertexColors: false });
+            const botMat  = new THREE.MeshStandardMaterial({ map: tDirt,   vertexColors: false });
+            const mats = [sideMat, sideMat, topMat, botMat, sideMat, sideMat];
 
             const geo = new THREE.BoxGeometry(CELL, hW, CELL);
             const im  = new THREE.InstancedMesh(geo, mats, cnt[h]);
@@ -161,9 +205,13 @@ const World = {
                 const wz = -HALF + gz*CELL + CELL/2;
                 dummy.position.set(wx, hW/2, wz);
                 dummy.updateMatrix();
-                im.setMatrixAt(idx++, dummy.matrix);
+                im.setMatrixAt(idx, dummy.matrix);
+                // Per-block biome colour
+                im.setColorAt(idx, biomeCol(gx, gz, h));
+                idx++;
             }
             im.instanceMatrix.needsUpdate = true;
+            if (im.instanceColor) im.instanceColor.needsUpdate = true;
             GAME.scene.add(im);
         }
     },
