@@ -20,6 +20,24 @@ const NPCs = {
     tamedHamsters: 0,
     kittens: [],
     stableUnicorns: [],
+    axolotls: [],
+    tamedAxolotls: 0,
+    sheep: [],
+    tamedSheep: 0,
+    _tamedFollowers: [],
+
+    // Limit to 3 tamed followers — oldest gets freed
+    _addFollower(npc) {
+        this._tamedFollowers.push(npc);
+        if (this._tamedFollowers.length > 3) {
+            const oldest = this._tamedFollowers.shift();
+            if (oldest && oldest.userData) {
+                oldest.userData.tamed = false;
+                oldest.userData.wandering = true;
+                Effects.showMessage('Один друг отправился гулять...');
+            }
+        }
+    },
 
     init() {
         this._createUnicorn(-12, 8);
@@ -72,6 +90,134 @@ const NPCs = {
         kittenColors.forEach((color, i) => {
             this._createKitten(-25 + 6 + (i - 1.5) * 1.2, 20 + 1.5, color, i === 3);
         });
+
+        // Axolotls in lake
+        this._createAxolotl(8, 10, 0xFFB6C1);   // pink
+        this._createAxolotl(12, 8, 0x87CEEB);   // blue
+        this._createAxolotl(10, 12, 0xFFB6C1);  // pink
+
+        // Sheep near meadow
+        const woolColors = [0xFFFFFF, 0xFF69B4, 0x87CEEB, 0xFFD700, 0xAA44FF];
+        woolColors.forEach((c, i) => {
+            const a = (i/5)*Math.PI*2;
+            this._createSheep(-8+Math.cos(a)*6, 25+Math.sin(a)*6, c);
+        });
+    },
+
+    // ── AXOLOTL (MC style) ────────────────────────────────────────
+    _createAxolotl(x, z, color) {
+        const g = new THREE.Group();
+        const bodyMat = new THREE.MeshStandardMaterial({ color });
+        const darkMat = new THREE.MeshStandardMaterial({ color: 0xCC88AA });
+        const eyeMat  = new THREE.MeshStandardMaterial({ color: 0x222222 });
+
+        // Body: long, low
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.35, 0.4), bodyMat);
+        body.castShadow = true; g.add(body);
+
+        // Head: round, big
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.38, 0.42), bodyMat);
+        head.position.set(0.55, 0.02, 0); g.add(head);
+
+        // Eyes (big)
+        [0.16, -0.16].forEach(z => {
+            const eye = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.1, 0.1), eyeMat);
+            eye.position.set(0.75, 0.08, z); g.add(eye);
+        });
+
+        // Gills (feathery protrusions on head — pink/red)
+        const gillMat = new THREE.MeshStandardMaterial({ color: 0xFF4488 });
+        [-0.12, 0, 0.12].forEach(z => {
+            const gill = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.04), gillMat);
+            gill.position.set(0.38, 0.28, z); g.add(gill);
+        });
+
+        // Legs (4 short)
+        [
+            { x: 0.3, z: 0.22 }, { x: 0.3, z: -0.22 },
+            { x:-0.3, z: 0.22 }, { x:-0.3, z: -0.22 }
+        ].forEach(lp => {
+            const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.1), bodyMat);
+            leg.position.set(lp.x, -0.22, lp.z); g.add(leg);
+        });
+
+        // Tail
+        const tail = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.25, 0.08), bodyMat);
+        tail.position.set(-0.6, 0, 0); tail.rotation.z = 0.2; g.add(tail);
+
+        g.position.set(x, 0.3, z);
+        g.userData = {
+            type: 'axolotl', tamed: false, tamedIndex: -1,
+            phase: Math.random()*Math.PI*2, homeX: x, homeZ: z,
+            aiTimer: 0, aiDir: Math.random()*Math.PI*2,
+        };
+        GAME.scene.add(g);
+        this.axolotls.push(g);
+    },
+
+    // ── SHEEP (MC style) ─────────────────────────────────────────
+    _createSheep(x, z, woolColor) {
+        const g = new THREE.Group();
+        const woolMat = new THREE.MeshStandardMaterial({ color: woolColor });
+        const skinMat = new THREE.MeshStandardMaterial({ color: 0xE8D8C0 }); // beige skin
+        const eyeMat  = new THREE.MeshStandardMaterial({ color: 0x222222 });
+        const hoofMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
+
+        // Wool body (big fluffy cube)
+        const woolBody = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.1, 0.9), woolMat);
+        woolBody.castShadow = true; g.add(woolBody);
+
+        // Head (skin, smaller)
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.55), skinMat);
+        head.position.set(0.85, 0.12, 0); head.castShadow = true; g.add(head);
+
+        // Eyes
+        [0.2, -0.2].forEach(z => {
+            const eye = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.1, 0.1), eyeMat);
+            eye.position.set(1.12, 0.16, z); g.add(eye);
+        });
+
+        // Nose
+        const nose = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.06, 0.12),
+            new THREE.MeshStandardMaterial({ color: 0xD49090 }));
+        nose.position.set(1.15, 0.02, 0); g.add(nose);
+
+        // Ears
+        [0.22, -0.22].forEach(z => {
+            const ear = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.06), skinMat);
+            ear.position.set(0.72, 0.42, z); g.add(ear);
+        });
+
+        // Legs (4 thin legs, hooves)
+        const legPivots = {};
+        [
+            { name:'FL', x: 0.45, z: 0.28 }, { name:'FR', x: 0.45, z:-0.28 },
+            { name:'BL', x:-0.45, z: 0.28 }, { name:'BR', x:-0.45, z:-0.28 }
+        ].forEach(lp => {
+            const piv = new THREE.Group();
+            piv.position.set(lp.x, -0.45, lp.z);
+            const leg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.6, 0.2), skinMat);
+            leg.position.y = -0.3; leg.castShadow = true; piv.add(leg);
+            const hoof = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.12, 0.22), hoofMat);
+            hoof.position.y = -0.6; piv.add(hoof);
+            g.add(piv);
+            legPivots[lp.name] = piv;
+        });
+
+        // Tail (tiny wool puff)
+        const tail = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.18), woolMat);
+        tail.position.set(-0.76, 0.2, 0); g.add(tail);
+
+        g.position.set(x, 0.9, z);
+        g.userData = {
+            type: 'sheep', woolColor, tamed: false, tamedIndex: -1,
+            aiTimer: 0, aiDir: Math.random()*Math.PI*2,
+            aiSpeed: 1.2, aiMoving: true,
+            legPivots, isWalking: false, homeX: x, homeZ: z,
+            eatTimer: 3 + Math.random()*5
+        };
+        GAME.scene.add(g);
+        this.sheep.push(g);
     },
 
     // === UNICORN (with cuter face + timed taming) ===
@@ -360,24 +506,50 @@ const NPCs = {
     },
 
     _createButterfly(x, y, z) {
+        // ── MC Bee style: striped fuzzy body, transparent wings ──────
         const g = new THREE.Group();
-        const colors = [0xff69b4, 0xffd700, 0xff85a2, 0xffc0cb];
-        const mat = new THREE.MeshStandardMaterial({
-            color: colors[Math.floor(Math.random() * colors.length)],
+        const yellowMat = new THREE.MeshStandardMaterial({ color: 0xF5C400 });
+        const blackMat  = new THREE.MeshStandardMaterial({ color: 0x1A1A1A });
+        const wingMat   = new THREE.MeshStandardMaterial({
+            color: 0xC8E8FF, transparent: true, opacity: 0.6,
             side: THREE.DoubleSide
         });
 
-        const wL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 0.35), mat);
-        wL.position.z = 0.2;
-        g.add(wL);
-        const wR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 0.35), mat);
-        wR.position.z = -0.2;
-        g.add(wR);
+        // Body: alternating black/yellow stripes (MC bee)
+        [0xF5C400, 0x1A1A1A, 0xF5C400].forEach((c, i) => {
+            const seg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.18),
+                new THREE.MeshStandardMaterial({ color: c }));
+            seg.position.set(-0.15 + i * 0.15, 0, 0);
+            g.add(seg);
+        });
 
-        g.add(new THREE.Mesh(
-            new THREE.BoxGeometry(0.4, 0.08, 0.08),
-            new THREE.MeshStandardMaterial({ color: 0x3d2b1f })
-        ));
+        // Eyes (two black dots)
+        [0.06, -0.06].forEach(z => {
+            const eye = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.06, 0.04), blackMat);
+            eye.position.set(0.22, 0.04, z);
+            g.add(eye);
+        });
+
+        // Stinger
+        const sting = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.04), blackMat);
+        sting.position.set(-0.28, 0, 0);
+        g.add(sting);
+
+        // Antennae
+        [0.05, -0.05].forEach(z => {
+            const ant = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.12, 0.04), blackMat);
+            ant.position.set(0.18, 0.14, z);
+            ant.rotation.z = 0.3 * Math.sign(z);
+            g.add(ant);
+        });
+
+        // Wings — flat panels, MC style
+        const wL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.02, 0.22), wingMat);
+        wL.position.set(0, 0.12, 0.22);
+        g.add(wL);
+        const wR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.02, 0.22), wingMat);
+        wR.position.set(0, 0.12, -0.22);
+        g.add(wR);
 
         g.position.set(x, y, z);
         g.userData = {
@@ -385,8 +557,7 @@ const NPCs = {
             centerX: x, centerZ: z,
             radius: 2 + Math.random() * 3,
             wL, wR,
-            tamed: false,
-            tamedIndex: -1
+            tamed: false, tamedIndex: -1
         };
 
         GAME.scene.add(g);
@@ -1096,6 +1267,32 @@ const NPCs = {
                 Effects.spawnHearts(h.position.x, h.position.y + 0.3, h.position.z);
                 Sounds.squeak();
                 Effects.showMessage(h.userData.name + ' приручён(а)!');
+            }
+        });
+        // Axolotls
+        this.axolotls.forEach(a => {
+            if (a.userData.tamed) return;
+            if (Dog.group.position.distanceTo(a.position) < 3) {
+                a.userData.tamed = true;
+                a.userData.tamedIndex = this.tamedAxolotls;
+                this.tamedAxolotls++;
+                this._addFollower(a);
+                Effects.spawnHearts(a.position.x, a.position.y + 0.5, a.position.z);
+                Sounds.tame();
+                Effects.showMessage('Аксолотль подружился! 💖');
+            }
+        });
+        // Sheep
+        this.sheep.forEach(s => {
+            if (s.userData.tamed) return;
+            if (Dog.group.position.distanceTo(s.position) < 3) {
+                s.userData.tamed = true;
+                s.userData.tamedIndex = this.tamedSheep;
+                this.tamedSheep++;
+                this._addFollower(s);
+                Effects.spawnHearts(s.position.x, s.position.y + 0.5, s.position.z);
+                Sounds.tame();
+                Effects.showMessage('Овечка приручена! Беее! 🐑');
             }
         });
     },
@@ -1820,9 +2017,105 @@ const NPCs = {
                 hint = 'Нажми E чтобы приручить ' + h.userData.name + '!';
             }
         });
+        this.axolotls.forEach(a => {
+            if (!a.userData.tamed && Dog.group.position.distanceTo(a.position) < 3) {
+                hint = 'Нажми E чтобы подружиться с аксолотлем!';
+            }
+        });
+        this.sheep.forEach(s => {
+            if (!s.userData.tamed && Dog.group.position.distanceTo(s.position) < 3) {
+                hint = 'Нажми E чтобы приручить овечку!';
+            }
+        });
         const el = document.getElementById('hint');
         el.textContent = hint;
         el.style.display = hint ? 'block' : 'none';
+
+        // === Axolotls AI (swim in lake) ===
+        this.axolotls.forEach(a => {
+            const d = a.userData;
+            const tY = a.position.y;
+            if (d.tamed) {
+                // Follow underwater
+                const tx = Dog.group.position.x + Math.cos(t + d.phase) * 1.5;
+                const tz = Dog.group.position.z + Math.sin(t + d.phase) * 1.5;
+                a.position.x += (tx - a.position.x) * 2 * dt;
+                a.position.z += (tz - a.position.z) * 2 * dt;
+                a.position.y = 0.3 + Math.sin(t * 2 + d.phase) * 0.15;
+            } else {
+                // Swim in circle in lake
+                d.phase += dt * 0.8;
+                a.position.x = d.homeX + Math.cos(d.phase) * (2 + Math.sin(d.phase*0.3));
+                a.position.z = d.homeZ + Math.sin(d.phase * 1.1) * 2;
+                a.position.y = 0.3 + Math.sin(t * 3 + d.phase) * 0.1;
+                a.rotation.y = d.phase + Math.PI/2;
+            }
+            // Tail wiggle
+            a.rotation.z = Math.sin(t * 4 + d.phase) * 0.2;
+        });
+
+        // === Sheep AI ===
+        this.sheep.forEach(s => {
+            const d = s.userData;
+            // Eating animation
+            d.eatTimer -= dt;
+            const isEating = d.eatTimer <= 0 && !d.isWalking;
+            if (isEating && d.eatTimer > -2) {
+                s.rotation.x = Math.sin(t * 4) * 0.15; // head bob eating
+            } else if (d.eatTimer <= -2) {
+                s.rotation.x = 0;
+                d.eatTimer = 3 + Math.random() * 5;
+            }
+
+            if (d.tamed) {
+                const tx = Dog.group.position.x - Math.sin(Dog.yaw) * 3 + Math.random() * 0.5;
+                const tz = Dog.group.position.z - Math.cos(Dog.yaw) * 3 + Math.random() * 0.5;
+                const dx = tx - s.position.x, dz = tz - s.position.z;
+                const dist = Math.sqrt(dx*dx+dz*dz);
+                d.isWalking = dist > 1;
+                if (d.isWalking) {
+                    const spd = Math.min(dist*2, 4);
+                    s.position.x += (dx/dist)*spd*dt;
+                    s.position.z += (dz/dist)*spd*dt;
+                    s.rotation.y = Math.atan2(dx, dz);
+                }
+            } else {
+                // Flee if player close
+                const pd = Dog.group.position.distanceTo(s.position);
+                if (pd < 5 && !s.userData.tamed) {
+                    const fx = s.position.x - Dog.group.position.x;
+                    const fz = s.position.z - Dog.group.position.z;
+                    const fl = Math.sqrt(fx*fx+fz*fz) || 1;
+                    s.position.x += (fx/fl) * 2.5 * dt;
+                    s.position.z += (fz/fl) * 2.5 * dt;
+                    d.isWalking = true;
+                } else {
+                    d.aiTimer -= dt;
+                    if (d.aiTimer <= 0) {
+                        d.aiTimer = 2 + Math.random() * 4;
+                        d.aiDir = Math.random() * Math.PI * 2;
+                        d.aiMoving = Math.random() > 0.4;
+                    }
+                    d.isWalking = d.aiMoving;
+                    if (d.aiMoving) {
+                        const mx = Math.sin(d.aiDir)*d.aiSpeed*dt;
+                        const mz = Math.cos(d.aiDir)*d.aiSpeed*dt;
+                        s.position.x += mx; s.position.z += mz;
+                        s.rotation.y = Math.atan2(mx, mz);
+                        const hd = Math.sqrt((s.position.x-d.homeX)**2+(s.position.z-d.homeZ)**2);
+                        if (hd > 10) d.aiDir = Math.atan2(d.homeX-s.position.x, d.homeZ-s.position.z);
+                    }
+                }
+            }
+            if (d.legPivots && d.isWalking) {
+                const a = Math.sin(t*8)*0.35;
+                d.legPivots.FL.rotation.z = a; d.legPivots.BR.rotation.z = a;
+                d.legPivots.FR.rotation.z = -a; d.legPivots.BL.rotation.z = -a;
+            } else if (d.legPivots) {
+                ['FL','FR','BL','BR'].forEach(k => { d.legPivots[k].rotation.z *= 0.85; });
+            }
+            s.position.y = (World.getTerrainY ? World.getTerrainY(s.position.x, s.position.z) : 0) + 0.9;
+        });
     }
 };
 

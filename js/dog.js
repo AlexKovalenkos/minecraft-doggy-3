@@ -30,135 +30,132 @@ const Dog = {
     inWater: false,
 
     init() {
-        // PX=0.32 so that 5*PX = 1.6 = groundOffset
-        const PX = 0.32;
-        this._PX = PX;
+        // ── Тёпа: почти MC Wolf + крылья бабочки ────────────────────
+        // Scale: 1 MC pixel = 0.125 units
+        // Body:  9×6×6 px → 1.125 × 0.75 × 0.75
+        // Head:  6×6×6 px → 0.75 cube
+        // Legs:  2×8×2 px → 0.25 × 1.0 × 0.25
+        const P = 0.125;
+        this._PX = P;
         const g = this.group;
 
-        function mt(c) { return new THREE.MeshStandardMaterial({ color: c }); }
-        function bx(w, h, d, m) {
-            const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+        function mt(c, em, ei) {
+            const m = new THREE.MeshStandardMaterial({ color: c });
+            if (em) { m.emissive = new THREE.Color(em); m.emissiveIntensity = ei || 0.1; }
+            return m;
+        }
+        function bx(w, h, d, mat) {
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
             mesh.castShadow = true;
             return mesh;
         }
 
-        const C = {
-            b1: mt(0xC9A06F), b2: mt(0xAD8050), b3: mt(0x8B5E30), b4: mt(0x6B3A1A),
-            cap: mt(0x5C3320), face: mt(0xA07550), snout: mt(0xBB8E5E),
-            eye: mt(0x111111), eyeH: mt(0xFFFFFF), nose: mt(0x1A0A00),
-            wY: mt(0xE8C028), wD: mt(0x1B3A7A),
-            leg: mt(0x8B5E30), tail: mt(0x6B3A1A),
-        };
+        const grey   = mt(0xBFBFBF);   // MC wolf grey body
+        const dark   = mt(0x7A7A7A);   // darker fur (head, legs)
+        const white  = mt(0xF0F0F0);   // chest patch
+        const eyeM   = mt(0x3B2F1A);   // brown eyes
+        const eyeHM  = mt(0xFFFFFF);   // eye highlight
+        const noseM  = mt(0x111111);   // black nose
+        const muzzM  = mt(0xE0D8C0);   // lighter snout
+        const collarM = mt(0xCC2222, 0x880000, 0.3);  // red collar (glowing)
+        const wingY  = mt(0xE8C028, 0xCC9900, 0.15);  // wing yellow
+        const wingB  = mt(0x1B3A7A);   // wing blue dots
+        const tailM  = mt(0x999999);   // tail tip white
 
-        // ── BODY: 4 stripes ──
-        const bMats = [C.b1, C.b2, C.b3, C.b4];
-        for (let i = 0; i < 4; i++) {
-            const s = bx(10 * PX, 1 * PX, 4 * PX, bMats[i]);
-            s.position.set(0, (-1.5 + i) * PX, 0);
-            g.add(s);
-            this.bMesh.push(s);
-        }
+        const bW = 9*P, bH = 6*P, bD = 6*P;
+
+        // ── BODY ──
+        const body = bx(bW, bH, bD, grey);
+        body.position.set(0, 0, 0);
+        g.add(body);
+        this.bMesh.push(body);
+
+        // White chest patch
+        const chest = bx(4*P, 3*P, bD+0.01, white);
+        chest.position.set(3*P, -1.5*P, 0);
+        g.add(chest);
+        this.bMesh.push(chest);
 
         // ── HEAD ──
-        const hx = 6.5 * PX;
+        const hS = 6*P;
+        const headX = bW/2 + hS/2 - P;
+        const headY = bH/2 - hS/2 + 2*P;
 
-        const faceM = bx(3 * PX, 2 * PX, 4 * PX, C.face);
-        faceM.position.set(hx, 1 * PX, 0);
-        g.add(faceM);
+        const head = bx(hS, hS, hS, dark);
+        head.position.set(headX, headY, 0);
+        g.add(head);
 
-        const capM = bx(3 * PX, 2 * PX, 4 * PX, C.cap);
-        capM.position.set(hx, 3 * PX, 0);
-        g.add(capM);
+        // Snout / muzzle
+        const snout = bx(4*P, 3*P, 4*P, muzzM);
+        snout.position.set(headX + hS/2, headY - P, 0);
+        g.add(snout);
 
-        // Snout line
-        const snM = bx(0.05, 1 * PX, 1.2 * PX, C.snout);
-        snM.position.set(hx + 1.5 * PX, 0.5 * PX, 0);
-        g.add(snM);
+        // Nose
+        const nose = bx(P*0.8, P*1.5, P*2, noseM);
+        nose.position.set(snout.position.x + 2*P, snout.position.y + 0.5*P, 0);
+        g.add(nose);
 
-        // ── EYES ──
-        const eF = hx + 1.5 * PX + 0.01;
-        const eS = 1.1 * PX;
-
-        const eyL = bx(0.12, eS, eS, C.eye);
-        eyL.position.set(eF, 1.6 * PX, 0.75 * PX);
-        g.add(eyL);
-        const eyR = bx(0.12, eS, eS, C.eye);
-        eyR.position.set(eF, 1.6 * PX, -0.75 * PX);
-        g.add(eyR);
-
-        // Eye highlights
-        const hlS = 0.3 * PX;
-        const hlL = bx(0.06, hlS, hlS, C.eyeH);
-        hlL.position.set(eF + 0.02, 1.9 * PX, 1.05 * PX);
-        g.add(hlL);
-        const hlR = bx(0.06, hlS, hlS, C.eyeH);
-        hlR.position.set(eF + 0.02, 1.9 * PX, -0.45 * PX);
-        g.add(hlR);
-
-        // ── MUZZLE ──
-        const muzzleB = bx(1 * PX, 1 * PX, 1.5 * PX, C.snout);
-        muzzleB.position.set(hx + 2 * PX, 0.5 * PX, 0);
-        g.add(muzzleB);
-
-        // Nose tip
-        const noseM = bx(0.12, 0.4 * PX, 0.5 * PX, C.nose);
-        noseM.position.set(hx + 2.5 * PX + 0.01, 0.7 * PX, 0);
-        g.add(noseM);
-
-        // Smile
-        const smF = hx + 2.5 * PX + 0.01;
-        [0.15, -0.15].forEach(zz => {
-            const sm = bx(0.06, 0.06, 0.3 * PX, C.nose);
-            sm.position.set(smF, 0.2 * PX, zz * PX);
-            sm.rotation.x = zz > 0 ? 0.4 : -0.4;
-            g.add(sm);
+        // Eyes
+        [2.2*P, -2.2*P].forEach(z => {
+            const eye = bx(P*0.5, 2*P, 2*P, eyeM);
+            eye.position.set(headX + hS/2 + 0.01, headY + P, z);
+            g.add(eye);
+            const hl = bx(P*0.3, P, P, eyeHM);
+            hl.position.set(headX + hS/2 + 0.02, headY + 1.5*P, z + 0.5*P);
+            g.add(hl);
         });
 
-        // ── EARS (hanging down) ──
-        [1, -1].forEach(zs => {
-            const ear = bx(1 * PX, 2 * PX, 1 * PX, C.cap);
-            ear.position.set(hx, 2.5 * PX, 2.3 * PX * zs);
-            ear.rotation.x = -0.3 * zs;
+        // Ears — perked up (MC wolf style)
+        [2.5*P, -2.5*P].forEach(z => {
+            const ear = bx(2*P, 3*P, P, dark);
+            ear.position.set(headX - P, headY + hS/2 + P, z);
             g.add(ear);
         });
 
+        // Red collar
+        const collar = bx(bW*0.7, P*1.5, bD+0.02, collarM);
+        collar.position.set(headX - hS/2, headY - hS/2, 0);
+        g.add(collar);
+
         // ── LEGS ──
-        const legG = new THREE.BoxGeometry(1 * PX, 3 * PX, 1 * PX);
+        const legGeo = new THREE.BoxGeometry(2*P, 8*P, 2*P);
         [
-            { n: 'FL', x: 3.5, z: 1.2 },
-            { n: 'FR', x: 3.5, z: -1.2 },
-            { n: 'BL', x: -3.5, z: 1.2 },
-            { n: 'BR', x: -3.5, z: -1.2 },
+            { n: 'FL', x:  3*P, z:  2.2*P },
+            { n: 'FR', x:  3*P, z: -2.2*P },
+            { n: 'BL', x: -3*P, z:  2.2*P },
+            { n: 'BR', x: -3*P, z: -2.2*P },
         ].forEach(d => {
-            const p = new THREE.Group();
-            p.position.set(d.x * PX, -2 * PX, d.z * PX);
-            const leg = new THREE.Mesh(legG, C.leg);
-            leg.position.y = -1.5 * PX;
+            const piv = new THREE.Group();
+            piv.position.set(d.x, -bH/2, d.z);
+            const leg = new THREE.Mesh(legGeo, dark);
+            leg.position.y = -4*P;
             leg.castShadow = true;
-            p.add(leg);
-            g.add(p);
-            this.pivots['leg' + d.n] = p;
+            piv.add(leg);
+            g.add(piv);
+            this.pivots['leg' + d.n] = piv;
         });
 
-        // ── TAIL (3-segment curved) ──
+        // ── TAIL — upward curve like MC wolf ──
         const tailP = new THREE.Group();
-        tailP.position.set(-5 * PX, 1 * PX, 0);
+        tailP.position.set(-bW/2, bH/4, 0);
         [
-            { w: 0.7, h: 1.3, x: 0, y: 0.4, r: 0.2 },
-            { w: 0.6, h: 1.3, x: -0.5, y: 1.4, r: 0.6 },
-            { w: 0.5, h: 1.0, x: -1.2, y: 2.1, r: 1.0 },
-        ].forEach(s => {
-            const seg = bx(s.w * PX, s.h * PX, 0.6 * PX, C.tail);
-            seg.position.set(s.x * PX, s.y * PX, 0);
+            { r: -0.4, y: 2*P },
+            { r: -0.8, y: 4.5*P },
+            { r: -1.1, y: 6.5*P },
+        ].forEach((s, i) => {
+            const seg = new THREE.Mesh(new THREE.BoxGeometry(2*P, 2.5*P, 2*P),
+                i === 2 ? tailM : dark);
+            seg.position.set(0, s.y, 0);
             seg.rotation.z = s.r;
+            seg.castShadow = true;
             tailP.add(seg);
         });
         g.add(tailP);
         this.pivots.tail = tailP;
 
-        // ── BUTTERFLY WINGS ──
-        this._buildWing('L', PX, C.wY, C.wD, 1);
-        this._buildWing('R', PX, C.wY, C.wD, -1);
+        // ── BUTTERFLY WINGS (уникальность Тёпы) ──
+        this._buildWing('L', P, wingY, wingB, 1);
+        this._buildWing('R', P, wingY, wingB, -1);
 
         g.position.set(0, 5 * PX, 0); // 5*0.32 = 1.6 = groundOffset
         GAME.scene.add(g);
@@ -200,72 +197,84 @@ const Dog = {
     },
 
     animate(dt, t, isMoving) {
-        const flying = this.isFlying || !this.onGround;
-        const PX = this._PX;
-        const wSpread = 0.15;
+        const flying   = this.isFlying || !this.onGround;
+        const sitting  = this.sitting && this.onGround && !flying;
+        const wSpread  = 0.15;
 
-        // Swimming animation
+        // ── SITTING animation ────────────────────────────────────────
+        if (sitting) {
+            // Back legs fold under body, front legs stay
+            this.pivots.legBL.rotation.z =  1.1;
+            this.pivots.legBR.rotation.z =  1.1;
+            this.pivots.legFL.rotation.z = -0.3;
+            this.pivots.legFR.rotation.z = -0.3;
+            // Body tilts back slightly — simulate by moving group down
+            this.group.position.y = Math.max(
+                this.group.position.y - 0.4 * dt,
+                (World.getTerrainY ? World.getTerrainY(this.group.position.x, this.group.position.z) : 0) + 1.2
+            );
+            // Tail wags while sitting
+            this.pivots.tail.rotation.z = Math.sin(t * 6) * 0.4;
+            // Wings gentle breathe
+            const breath = Math.sin(t * 1.5) * 0.05;
+            this.pivots.wingL.rotation.x = wSpread + breath;
+            this.pivots.wingR.rotation.x = -(wSpread + breath);
+            return;
+        }
+
+        // ── LEGS ─────────────────────────────────────────────────────
         if (this.inWater && this.onGround) {
-            // Legs paddle fast
             const a = Math.sin(t * 14) * 0.5;
-            this.pivots.legFL.rotation.z = a;
-            this.pivots.legBR.rotation.z = a;
+            this.pivots.legFL.rotation.z =  a;
+            this.pivots.legBR.rotation.z =  a;
             this.pivots.legFR.rotation.z = -a;
             this.pivots.legBL.rotation.z = -a;
-            // Body bob in water
-            const bob = Math.sin(t * 3) * 0.03;
-            this.bMesh.forEach((m, i) => {
-                m.position.y = (-1.5 + i) * PX + bob;
-            });
         } else if (isMoving && this.onGround) {
-            const a = Math.sin(t * 10) * 0.4;
-            this.pivots.legFL.rotation.z = a;
-            this.pivots.legBR.rotation.z = a;
+            const speed = Controls && Controls._sprinting ? 14 : 10;
+            const amp   = Controls && Controls._sprinting ? 0.5 : 0.4;
+            const a = Math.sin(t * speed) * amp;
+            this.pivots.legFL.rotation.z =  a;
+            this.pivots.legBR.rotation.z =  a;
             this.pivots.legFR.rotation.z = -a;
             this.pivots.legBL.rotation.z = -a;
         } else if (flying) {
-            this.pivots.legFL.rotation.z = 0.2;
-            this.pivots.legFR.rotation.z = 0.2;
+            this.pivots.legFL.rotation.z =  0.2;
+            this.pivots.legFR.rotation.z =  0.2;
             this.pivots.legBL.rotation.z = -0.2;
             this.pivots.legBR.rotation.z = -0.2;
         } else {
-            ['legFL', 'legFR', 'legBL', 'legBR'].forEach(k => {
-                this.pivots[k].rotation.z *= 0.9;
+            ['legFL','legFR','legBL','legBR'].forEach(k => {
+                this.pivots[k].rotation.z *= 0.85;
             });
         }
 
-        // Butterfly wings
+        // ── BUTTERFLY WINGS ──────────────────────────────────────────
         if (flying) {
             const wa = wSpread + Math.abs(Math.sin(t * 8)) * 0.7;
-            this.pivots.wingL.rotation.x = wa;
+            this.pivots.wingL.rotation.x =  wa;
             this.pivots.wingR.rotation.x = -wa;
         } else if (isMoving) {
-            this.pivots.wingL.rotation.x = wSpread + Math.sin(t * 3) * 0.08;
+            this.pivots.wingL.rotation.x =  wSpread + Math.sin(t * 3) * 0.08;
             this.pivots.wingR.rotation.x = -(wSpread + Math.sin(t * 3) * 0.08);
         } else {
             const breath = Math.sin(t * 1.5) * 0.06;
-            this.pivots.wingL.rotation.x = wSpread + breath;
+            this.pivots.wingL.rotation.x =  wSpread + breath;
             this.pivots.wingR.rotation.x = -(wSpread + breath);
         }
 
-        // Tail — speed depends on state
+        // ── TAIL ─────────────────────────────────────────────────────
         const tailSpeed = flying ? 8 : isMoving ? 5 : 2;
-        const tailAmp = isMoving ? 0.25 : 0.1;
+        const tailAmp   = isMoving ? 0.3 : 0.12;
         this.pivots.tail.rotation.z = Math.sin(t * tailSpeed) * tailAmp;
+        // MC wolf tail stays up — base upward offset
+        this.pivots.tail.rotation.x = -0.5;
 
-        // Breathing (idle body scale pulse)
-        if (!isMoving && !flying && !this.inWater) {
-            this.bMesh[1].scale.x = 1 + Math.sin(t * 1.5) * 0.02;
-        } else {
-            this.bMesh[1].scale.x = 1;
-        }
-
-        // Body bob when walking (not swimming — handled above)
+        // ── BODY BOB ─────────────────────────────────────────────────
         if (isMoving && this.onGround && !this.inWater) {
             const bob = Math.sin(t * 20) * 0.015;
-            this.bMesh.forEach((m, i) => {
-                m.position.y = (-1.5 + i) * PX + bob;
-            });
+            this.bMesh.forEach(m => { m.position.y += (bob - m.position.y) * 0.3; });
+        } else if (!flying) {
+            this.bMesh.forEach(m => { m.position.y *= 0.9; });
         }
     }
 };
