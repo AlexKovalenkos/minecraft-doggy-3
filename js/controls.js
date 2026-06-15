@@ -131,6 +131,8 @@ const Controls = {
             document.getElementById('hotbar').style.display = 'flex';
             document.getElementById('crosshair').style.display = 'block';
             GAME.renderer.domElement.requestPointerLock();
+            const badge = document.getElementById('gameBadge');
+            if (badge) badge.style.display = 'block';
 
             const camDist = 8;
             GAME.camera.position.set(

@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Супер Тёпа 3</title>
+    <title>Пертёпа 3 · v0.5</title>
     <!-- Minecraft pixel font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <style>
@@ -149,6 +149,24 @@
             text-shadow: 2px 2px 0 #555500, 3px 3px 0 rgba(0,0,0,0.5);
             opacity: 0; transition: opacity 0.3s; pointer-events: none;
         }
+
+        /* Version tag on start screen */
+        #versionTag {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 7px; color: #aaaaaa;
+            text-shadow: 1px 1px 0 #000;
+            margin-top: 14px;
+        }
+
+        /* In-game version badge — bottom right corner */
+        #gameBadge {
+            position: absolute; bottom: 4px; right: 8px;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 6px; color: rgba(255,255,255,0.45);
+            text-shadow: 1px 1px 0 rgba(0,0,0,0.7);
+            pointer-events: none;
+            display: none; /* shown when game starts */
+        }
     </style>
 </head>
 <body>
@@ -184,22 +202,22 @@
         <div class="hint" id="hint"></div>
         <div class="message" id="message"></div>
         <div id="startScreen">
-            <h1>СУПЕР ТЁПА 3</h1>
+            <h1>ПЕРТЁПА 3</h1>
             <div class="subtitle">Летающий пёсик на волшебной полянке</div>
             <div class="controls-info">
-                <p><span class="key">W A S D</span> — Бегать</p>
-                <p><span class="key">Мышь / Тачпад</span> — Поворачивать Тёпу</p>
-                <p><span class="key">ПРОБЕЛ</span> — Летать вверх</p>
-                <p><span class="key">SHIFT</span> — Спуститься</p>
-                <p><span class="key">E</span> — Приручить единорожка</p>
-                <p><span class="key">R</span> — Сесть на дракона</p>
-                <p><span class="key">Q</span> — Гавкнуть</p>
-                <p><span class="key">1-5</span> — Выбрать блок</p>
-                <p><span class="key">Z</span> — Поставить блок &nbsp; <span class="key">X</span> — Убрать блок</p>
-                <p><span class="key">V</span> — Камера близко / далеко &nbsp; <span class="key">Ctrl</span> — Бежать</p>
+                <p><span class="key">W A S D</span> — Бегать &nbsp;&nbsp; <span class="key">Ctrl</span> — Бежать</p>
+                <p><span class="key">Мышь</span> — Поворот &nbsp;&nbsp; <span class="key">V</span> — Камера</p>
+                <p><span class="key">Пробел</span> — Лететь &nbsp;&nbsp; <span class="key">Shift</span> — Вниз</p>
+                <p><span class="key">E</span> — Приручить &nbsp;&nbsp; <span class="key">R</span> — Дракон</p>
+                <p><span class="key">Q</span> — Гавкнуть &nbsp;&nbsp; <span class="key">Esc</span> — Пауза</p>
+                <p><span class="key">1-5</span> — Блок &nbsp;&nbsp; <span class="key">Z</span> — Ставить &nbsp;&nbsp; <span class="key">X</span> — Убрать</p>
             </div>
             <button id="startBtn">ИГРАТЬ!</button>
+            <div id="versionTag">v0.5 · 15.06.2026</div>
         </div>
+
+        <!-- Version badge in-game (bottom-right corner) -->
+        <div id="gameBadge">ПЕРТЁПА 3 · v0.5 · 15.06.2026</div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
