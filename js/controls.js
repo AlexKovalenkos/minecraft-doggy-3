@@ -16,6 +16,9 @@ const Controls = {
     // Sprint
     _sprinting: false,
 
+    // Camera distance toggle (V key)
+    _camClose: true, // default: close (5 units) to see Тёпу
+
     // Camera bob
     _bobPhase: 0,
     _bobAmount: 0,
@@ -37,6 +40,12 @@ const Controls = {
             }
 
             if (e.repeat) return;
+
+            // V — toggle camera distance (close/far)
+            if (e.code === 'KeyV') {
+                this._camClose = !this._camClose;
+                Effects.showMessage(this._camClose ? '📷 Камера: близко' : '📷 Камера: далеко');
+            }
 
             if (e.code === 'KeyQ') Sounds.bark();
             if (e.code === 'KeyE') NPCs.tryTame();
@@ -445,19 +454,20 @@ const Controls = {
 
     updateCamera(dt) {
         const pos = Dog.group.position;
-        const baseCamDist = Dog.ridingDragon ? 14 : 8;
+        // V toggles between close (5) and far (10)
+        const baseCamDist = Dog.ridingDragon ? 14 : (this._camClose ? 5 : 10);
 
         const cx = pos.x - Math.sin(Dog.yaw) * baseCamDist * Math.cos(this.cameraPitch);
         const cz = pos.z - Math.cos(Dog.yaw) * baseCamDist * Math.cos(this.cameraPitch);
-        // Add camera bob offset to Y
-        const cy = pos.y + baseCamDist * Math.sin(this.cameraPitch) + 2 + this._bobAmount;
+        // Lower camera height: +1 instead of +2 so dog fills more of the frame
+        const cy = pos.y + baseCamDist * Math.sin(this.cameraPitch) + 1.2 + this._bobAmount;
 
         this._camTarget.set(cx, cy, cz);
-        // Tighter smoothing than before (18 vs 8) — still not fully rigid
         const smoothFactor = 1 - Math.exp(-18 * dt);
         GAME.camera.position.lerp(this._camTarget, smoothFactor);
 
-        this._lookGoal.set(pos.x, pos.y + 1, pos.z);
+        // Look at dog's head/body level (not 1 unit above group)
+        this._lookGoal.set(pos.x, pos.y + 0.5, pos.z);
         this._lookTarget.lerp(this._lookGoal, smoothFactor);
         GAME.camera.lookAt(this._lookTarget);
     }

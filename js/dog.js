@@ -118,6 +118,8 @@ const Dog = {
         g.add(collar);
 
         // ── LEGS ──
+        // pivotY = -0.6 so feet reach exactly y = -groundOffset = -1.6
+        // (pivot -0.6) + (leg center -4*P=-0.5) + (leg bottom -4*P=-0.5) = -1.6 ✓
         const legGeo = new THREE.BoxGeometry(2*P, 8*P, 2*P);
         [
             { n: 'FL', x:  3*P, z:  2.2*P },
@@ -126,7 +128,7 @@ const Dog = {
             { n: 'BR', x: -3*P, z: -2.2*P },
         ].forEach(d => {
             const piv = new THREE.Group();
-            piv.position.set(d.x, -bH/2, d.z);
+            piv.position.set(d.x, -0.6, d.z);
             const leg = new THREE.Mesh(legGeo, dark);
             leg.position.y = -4*P;
             leg.castShadow = true;
