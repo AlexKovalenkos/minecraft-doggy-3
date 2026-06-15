@@ -140,8 +140,17 @@ const Controls = {
                 Dog.group.position.y + camDist * Math.sin(this.cameraPitch) + 2,
                 Dog.group.position.z - Math.cos(Dog.yaw) * camDist * Math.cos(this.cameraPitch)
             );
-            GAME.camera.lookAt(Dog.group.position.x, Dog.group.position.y + 1, Dog.group.position.z);
-            this._lookTarget.set(Dog.group.position.x, Dog.group.position.y + 1, Dog.group.position.z);
+            const lookAhead = 10;
+            GAME.camera.lookAt(
+                Dog.group.position.x + Math.sin(Dog.yaw) * lookAhead,
+                Dog.group.position.y + 2.4,
+                Dog.group.position.z + Math.cos(Dog.yaw) * lookAhead
+            );
+            this._lookTarget.set(
+                Dog.group.position.x + Math.sin(Dog.yaw) * lookAhead,
+                Dog.group.position.y + 2.4,
+                Dog.group.position.z + Math.cos(Dog.yaw) * lookAhead
+            );
         });
 
         this._buildPauseMenu();
@@ -469,8 +478,13 @@ const Controls = {
         const smoothFactor = 1 - Math.exp(-18 * dt);
         GAME.camera.position.lerp(this._camTarget, smoothFactor);
 
-        // Look at dog's head/body level (not 1 unit above group)
-        this._lookGoal.set(pos.x, pos.y + 0.5, pos.z);
+        // Look ahead over the dog so landmarks, mountains, and the castle stay visible.
+        const lookAhead = Dog.ridingDragon ? 18 : 10;
+        this._lookGoal.set(
+            pos.x + Math.sin(Dog.yaw) * lookAhead,
+            pos.y + (Dog.ridingDragon ? 4 : 2.4),
+            pos.z + Math.cos(Dog.yaw) * lookAhead
+        );
         this._lookTarget.lerp(this._lookGoal, smoothFactor);
         GAME.camera.lookAt(this._lookTarget);
     }

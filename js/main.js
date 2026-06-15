@@ -4,6 +4,11 @@
 
 Save.init();
 
+// Debug hooks for visual QA in browser devtools/Codex checks.
+window.GAME = GAME;
+window.World = World;
+window.Dog = Dog;
+
 // ── Day/Night cycle ─────────────────────────────────────────
 const DAY = {
     time: 0.25,          // 0=midnight, 0.25=dawn, 0.5=noon, 0.75=dusk, 1=midnight
@@ -121,7 +126,7 @@ const Achievements = {
         ride_dragon:   { icon:'🐉', text:'Покоритель дракона!', cond: () => !!Dog.ridingDragon },
         reach_castle:  { icon:'🏰', text:'Замок найден!',     cond: () => {
             const p = Dog.group.position;
-            return Math.sqrt((p.x-85)**2+(p.z-80)**2) < 20;
+            return Math.sqrt((p.x-0)**2+(p.z-32)**2) < 24;
         }},
         fly_high:      { icon:'✈️', text:'Высоко лечу!',      cond: () => Dog.group.position.y > 18 },
         throne:        { icon:'👑', text:'Восседаю на троне!', cond: () => Dog.onThrone },

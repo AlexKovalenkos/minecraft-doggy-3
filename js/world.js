@@ -64,7 +64,7 @@ const World = {
         flat(-25, 20, 22);    // house
         flat(10, 10, 18);     // lake
         flat(30, 35, 18);     // stable
-        flat(0, 52, 28);      // castle cliff — directly ahead of spawn, 52 units away
+        flat(0, 32, 30);      // castle cliff — first-frame landmark ahead of spawn
         flat(-25+6, 20, 14);  // cat house area
         flat(-70, -65, 18);   // hamster house
         flat(12, -14, 12);    // NPC dog spawn
@@ -800,9 +800,9 @@ const World = {
             const W = 8 + Math.random() * 16;
             const D = 6 + Math.random() * 10;
             // Main rectangle
-            g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(W, 1.5, D), mat), {
-                position: { x: 0, y: 0, z: 0 }
-            }));
+            const main = new THREE.Mesh(new THREE.BoxGeometry(W, 1.5, D), mat);
+            main.position.set(0, 0, 0);
+            g.add(main);
             // Extra side blocks for irregular shape
             for (let j = 1; j < blockCount; j++) {
                 const bw = 4 + Math.random() * 8;
@@ -864,10 +864,12 @@ const World = {
         // Stone tiers: base=dark grey, mid=medium grey, top=light grey, snow=white
         const mountains = [
             // Big dramatic peaks with snow
-            { x: -55, z: -50, height: 22, base: 13 }, // tallest
+            { x: -36, z:  42, height: 28, base: 17 }, // visible left skyline from spawn
+            { x:  38, z:  46, height: 26, base: 16 }, // visible right skyline from spawn
+            { x: -55, z: -50, height: 22, base: 13 }, // back range
             { x:  65, z: -55, height: 20, base: 12 },
-            { x: -70, z:  55, height: 18, base: 11 },
-            { x:  55, z:  65, height: 16, base: 10 },
+            { x: -70, z:  55, height: 22, base: 13 },
+            { x:  55, z:  65, height: 20, base: 12 },
             { x: -80, z: -15, height: 19, base: 12 },
             { x:  70, z: -20, height: 15, base:  9 },
             // Medium peaks
@@ -1273,10 +1275,10 @@ const World = {
 
     // === PHASE 3: Castle on dramatic cliff ===
     _createCastle() {
-        // Castle sits on a 22-unit stone cliff DIRECTLY AHEAD of spawn (z=52)
-        // From spawn (0,0) looking forward (+Z) it's unmissable
-        const cx = 0, cz = 52;
-        const CLIFF_H = 22; // cliff height — towers above everything
+        // Castle sits on a tall stone cliff directly ahead of spawn.
+        // It is close enough to dominate the first frame, with the waterfall on the visible face.
+        const cx = 0, cz = 32;
+        const CLIFF_H = 26; // tall enough to read above trees and fog
 
         // ── Stone cliff / spire ─────────────────────────────────────
         const s1 = new THREE.MeshStandardMaterial({ color: 0x7A7A82 }); // dark stone base
@@ -1306,15 +1308,15 @@ const World = {
             )});
         });
 
-        // ── Waterfall down the east face ─────────────────────────────
+        // ── Waterfall down the front face (visible from spawn) ────────
         const wfMat = new THREE.MeshStandardMaterial({
             color: 0x3FC8E8, transparent: true, opacity: 0.75,
             emissive: 0x1A6888, emissiveIntensity: 0.2
         });
-        for (let i = 0; i < 10; i++) {
-            const wy = CLIFF_H - i * 2.2;
-            const wf = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.4, 1.8), wfMat);
-            wf.position.set(cx + 10 + i * 0.15, wy, cz + i * 0.3);
+        for (let i = 0; i < 12; i++) {
+            const wy = CLIFF_H - i * 2.15;
+            const wf = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.5, 1.2), wfMat);
+            wf.position.set(cx + Math.sin(i * 0.8) * 0.4, wy, cz - 10.4 - i * 0.12);
             GAME.scene.add(wf);
             if (!this._waterfallSegs) this._waterfallSegs = [];
             this._waterfallSegs.push(wf);
@@ -1324,19 +1326,19 @@ const World = {
             color: 0x3FC8E8, transparent: true, opacity: 0.6
         });
         const splash = new THREE.Mesh(new THREE.BoxGeometry(6, 0.4, 6), splashMat);
-        splash.position.set(cx + 11, 0.2, cz + 3);
+        splash.position.set(cx, 0.2, cz - 12.5);
         GAME.scene.add(splash);
-        this.waterZones.push({ cx: cx+11, cz: cz+3, halfW: 3, halfD: 3 });
+        this.waterZones.push({ cx, cz: cz-12.5, halfW: 4, halfD: 3 });
 
         // ── Stone staircase up the south face ─────────────────────────
         const stepMat = new THREE.MeshStandardMaterial({ color: 0x8A8A95 });
         for (let i = 0; i < 11; i++) {
             const step = new THREE.Mesh(new THREE.BoxGeometry(3.5, 2, 2.5), stepMat);
-            step.position.set(cx, i * 2 + 1, cz + 12 - i * 1.4);
+            step.position.set(cx - 7, i * 2 + 1, cz + 10 - i * 1.4);
             step.receiveShadow = true; GAME.scene.add(step);
             this.collidables.push({ box: new THREE.Box3(
-                new THREE.Vector3(cx-1.75, i*2, cz+12-i*1.4-1.25),
-                new THREE.Vector3(cx+1.75, i*2+2, cz+12-i*1.4+1.25)
+                new THREE.Vector3(cx-8.75, i*2, cz+10-i*1.4-1.25),
+                new THREE.Vector3(cx-5.25, i*2+2, cz+10-i*1.4+1.25)
             )});
         }
 
@@ -2523,52 +2525,74 @@ const World = {
         const flowerCols = [0xFF6B9D, 0xFFE066, 0xFF8C42, 0xCC44FF, 0xFF4444, 0x44CCFF];
 
         const skip = (x, z) =>
-            (Math.abs(x)<20&&Math.abs(z)<20) ||
+            (Math.abs(x)<3.5&&Math.abs(z)<3.5) || // only keep the exact spawn clear
+            (x > 0 && x < 20 && z > 0 && z < 21) || // lake surface
             (Math.abs(x+25)<14&&Math.abs(z-20)<12) ||
             (Math.abs(x-10)<14&&Math.abs(z-10)<14) ||
-            (Math.abs(x)<20&&Math.abs(z-52)<25); // castle cliff area
+            (Math.abs(x)<19&&Math.abs(z-32)<22); // castle cliff area
 
-        // === DENSE TALL GRASS — 500 tufts ===
-        for (let i = 0; i < 500; i++) {
-            const x = (Math.random()-0.5)*170;
-            const z = (Math.random()-0.5)*170;
-            if (skip(x, z)) continue;
-
+        const makeGrassTuft = (x, z, scale=1) => {
+            if (skip(x, z)) return;
             const gy = this.getTerrainY(x, z);
             const col = gCols[Math.floor(Math.random()*gCols.length)];
-            const h = 0.25 + Math.random()*0.30; // SHORT like MC (0.25-0.55)
-            const w = 0.50 + Math.random()*0.25;
-            const mat = new THREE.MeshStandardMaterial({color:col, side:THREE.DoubleSide});
-
+            const h = (0.55 + Math.random()*0.40) * scale;
+            const w = (0.65 + Math.random()*0.35) * scale;
+            const mat = new THREE.MeshStandardMaterial({
+                color: col,
+                emissive: col,
+                emissiveIntensity: 0.08,
+                side: THREE.DoubleSide
+            });
             const grp = new THREE.Group();
-            // MC grass = two thin planes in X pattern
             const p1 = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.025), mat);
             const p2 = new THREE.Mesh(new THREE.BoxGeometry(0.025, h, w), mat);
             p1.position.y = h/2; p2.position.y = h/2;
             grp.add(p1); grp.add(p2);
             grp.position.set(x, gy, z);
             GAME.scene.add(grp);
+        };
+
+        const makeFlower = (x, z, scale=1) => {
+            if (skip(x, z)) return;
+            const gy = this.getTerrainY(x, z);
+            const col = flowerCols[Math.floor(Math.random()*flowerCols.length)];
+            const stemM = new THREE.MeshStandardMaterial({color:0x44AA22, emissive:0x226611, emissiveIntensity:0.06});
+            const petM  = new THREE.MeshStandardMaterial({color:col, emissive:col, emissiveIntensity:0.12});
+            const grp = new THREE.Group();
+            const h = (0.35 + Math.random()*0.25) * scale;
+            const stem = new THREE.Mesh(new THREE.BoxGeometry(0.06,h,0.06), stemM);
+            stem.position.y = h/2;
+            const pet = new THREE.Mesh(new THREE.BoxGeometry(0.26,0.26,0.26), petM);
+            pet.position.y = h + 0.13;
+            grp.add(stem); grp.add(pet);
+            grp.position.set(x, gy, z);
+            GAME.scene.add(grp);
+        };
+
+        // === START MEADOW — visible immediately after pressing Play ===
+        for (let i = 0; i < 380; i++) {
+            const x = (Math.random()-0.5) * 44;
+            const z = 4 + Math.random() * 23;
+            makeGrassTuft(x, z, 1.2);
+        }
+        for (let i = 0; i < 90; i++) {
+            const x = (Math.random()-0.5) * 42;
+            const z = 5 + Math.random() * 22;
+            makeFlower(x, z, 1.15);
+        }
+
+        // === DENSE TALL GRASS — 500 tufts ===
+        for (let i = 0; i < 500; i++) {
+            const x = (Math.random()-0.5)*170;
+            const z = (Math.random()-0.5)*170;
+            makeGrassTuft(x, z, 1);
         }
 
         // === FLOWERS scattered — small bright dots ===
         for (let i = 0; i < 180; i++) {
             const x = (Math.random()-0.5)*160;
             const z = (Math.random()-0.5)*160;
-            if (skip(x, z)) continue;
-
-            const gy = this.getTerrainY(x, z);
-            const col = flowerCols[Math.floor(Math.random()*flowerCols.length)];
-            const stemM = new THREE.MeshStandardMaterial({color:0x44AA22});
-            const petM  = new THREE.MeshStandardMaterial({color:col});
-            const grp = new THREE.Group();
-            const h = 0.3 + Math.random()*0.25;
-            const stem = new THREE.Mesh(new THREE.BoxGeometry(0.06,h,0.06), stemM);
-            stem.position.y = h/2;
-            const pet = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.22,0.22), petM);
-            pet.position.y = h + 0.11;
-            grp.add(stem); grp.add(pet);
-            grp.position.set(x, gy, z);
-            GAME.scene.add(grp);
+            makeFlower(x, z, 1);
         }
 
         // === FERNS (darker, bigger) ===
@@ -2639,4 +2663,27 @@ const World = {
     }
 };
 
-World.init();
+try {
+    World.init();
+} catch (err) {
+    console.error('World.init failed:', err);
+    const el = document.createElement('pre');
+    el.id = 'worldInitError';
+    el.textContent = `World init failed:\n${err && err.stack ? err.stack : err}`;
+    el.style.cssText = [
+        'position:fixed',
+        'left:8px',
+        'top:8px',
+        'z-index:9999',
+        'max-width:70vw',
+        'max-height:45vh',
+        'overflow:auto',
+        'background:rgba(0,0,0,0.85)',
+        'color:#ff7777',
+        'font:12px monospace',
+        'padding:10px',
+        'white-space:pre-wrap',
+        'pointer-events:none'
+    ].join(';');
+    document.body.appendChild(el);
+}
