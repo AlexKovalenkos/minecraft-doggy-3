@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Пертёпа 3 · v0.5</title>
+    <title>Пертёпа 3</title>
     <!-- Minecraft pixel font -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <style>
@@ -213,14 +213,24 @@
                 <p><span class="key">1-5</span> — Блок &nbsp;&nbsp; <span class="key">Z</span> — Ставить &nbsp;&nbsp; <span class="key">X</span> — Убрать</p>
             </div>
             <button id="startBtn">ИГРАТЬ!</button>
-            <div id="versionTag">v0.5 · 15.06.2026</div>
+            <div id="versionTag"></div>
         </div>
 
         <!-- Version badge in-game (bottom-right corner) -->
-        <div id="gameBadge">ПЕРТЁПА 3 · v0.5 · 15.06.2026</div>
+        <div id="gameBadge"></div>
+
+        <script>
+            // Populate version strings once BUILD is loaded
+            document.addEventListener('DOMContentLoaded', () => {
+                document.title = `Пертёпа 3 · ${BUILD.full}`;
+                document.getElementById('versionTag').textContent = BUILD.full;
+                document.getElementById('gameBadge').textContent  = `ПЕРТЁПА 3 · ${BUILD.full}`;
+            });
+        </script>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+    <script src="js/version.js"></script>
     <script src="js/game.js"></script>
     <script src="js/sounds.js"></script>
     <script src="js/dog.js"></script>
