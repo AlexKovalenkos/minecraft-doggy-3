@@ -203,20 +203,22 @@ const Dog = {
         const sitting  = this.sitting && this.onGround && !flying;
         const wSpread  = 0.15;
 
-        // ── SITTING animation ────────────────────────────────────────
+        // ── SITTING animation ─────────────────────────────────────────
+        // Don't touch group.position (physics handles it) — only animate parts
         if (sitting) {
-            // Back legs fold under body, front legs stay
-            this.pivots.legBL.rotation.z =  1.1;
-            this.pivots.legBR.rotation.z =  1.1;
-            this.pivots.legFL.rotation.z = -0.3;
-            this.pivots.legFR.rotation.z = -0.3;
-            // Body tilts back slightly — simulate by moving group down
-            this.group.position.y = Math.max(
-                this.group.position.y - 0.4 * dt,
-                (World.getTerrainY ? World.getTerrainY(this.group.position.x, this.group.position.z) : 0) + 1.2
-            );
-            // Tail wags while sitting
-            this.pivots.tail.rotation.z = Math.sin(t * 6) * 0.4;
+            // Back legs fold under body
+            this.pivots.legBL.rotation.z =  1.0;
+            this.pivots.legBR.rotation.z =  1.0;
+            this.pivots.legFL.rotation.z = -0.15;
+            this.pivots.legFR.rotation.z = -0.15;
+            // Body meshes sink slightly (visual only, no Y change)
+            this.bMesh.forEach(m => {
+                m.position.y = m.position.y * 0.92 - 0.02 * dt;
+                m.position.y = Math.max(m.position.y, -0.35);
+            });
+            // Tail wags happily
+            this.pivots.tail.rotation.z = Math.sin(t * 6) * 0.5;
+            this.pivots.tail.rotation.x = -0.3;
             // Wings gentle breathe
             const breath = Math.sin(t * 1.5) * 0.05;
             this.pivots.wingL.rotation.x = wSpread + breath;

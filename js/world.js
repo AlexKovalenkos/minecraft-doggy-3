@@ -64,7 +64,7 @@ const World = {
         flat(-25, 20, 22);    // house
         flat(10, 10, 18);     // lake
         flat(30, 35, 18);     // stable
-        flat(85, 80, 30);     // castle
+        flat(42, 42, 30);     // castle — moved closer so player can find it
         flat(-25+6, 20, 14);  // cat house area
         flat(-70, -65, 18);   // hamster house
         flat(12, -14, 12);    // NPC dog spawn
@@ -146,8 +146,9 @@ const World = {
         GAME.scene.add(floor);
         GAME.ground = floor;
 
-        // ── Biome colour per grid cell ───────────────────────────────
-        // Returns THREE.Color for top face of block at (gx,gz,h)
+        // ── Biome colour — VIVID Minecraft palette ───────────────────
+        // Compensate for neutral grey tex (×0.9) → multiply up accordingly
+        // MC Plains grass: #5C9A2C, Lush: #4E8B22, Savanna: #8DB360
         const biomeCol = (gx, gz, h) => {
             const nx = gx / GRID, nz = gz / GRID;
             const bn = Math.sin(nx*4.7+nz*3.2+1.1)*0.38
@@ -155,18 +156,30 @@ const World = {
                      + Math.sin((nx+nz)*7.8)*0.15;
             const t = (bn + 0.85) / 1.70; // 0..1
 
-            // Height overrides
-            if (h >= 7) return new THREE.Color(0x909096); // stone
-            if (h >= 5) return new THREE.Color(0x5A6E48); // rocky mountain
+            // Height overrides (bright grey stone, not dark)
+            if (h >= 7) return new THREE.Color(0xB0B0B8);   // light MC stone
+            if (h >= 5) return new THREE.Color(0x7A9060);   // mountain green-grey
 
-            // Per-block micro-variation (±5%)
-            const jitter = 1 + (Math.sin(gx*31.7+gz*17.3)*0.05);
+            // Cherry blossom zone — grid cells near (-30, -30)
+            const wx2 = (-HALF + gx*CELL), wz2 = (-HALF + gz*CELL);
+            if (Math.sqrt((wx2+30)**2+(wz2+30)**2) < 28) {
+                return new THREE.Color(0xF4A8C8); // pink cherry blossom
+            }
 
+            // Per-block micro-variation (±6%) for natural look
+            const jitter = 1 + Math.sin(gx*31.7+gz*17.3)*0.06;
+
+            // VIVID MC-style colours (pre-compensated for grey tex multiply)
             let r, g, b;
-            if (t < 0.20) { r=0.72; g=0.78; b=0.28; }       // dry savanna
-            else if (t < 0.42) { r=0.38; g=0.62; b=0.20; }  // plains green
-            else if (t < 0.65) { r=0.27; g=0.55; b=0.17; }  // lush green
-            else { r=0.18; g=0.43; b=0.12; }                 // dark forest
+            if (t < 0.18) {
+                r=0.56; g=0.71; b=0.22; // savanna #8EB538 (MC savanna)
+            } else if (t < 0.40) {
+                r=0.42; g=0.72; b=0.22; // plains #6BB838 (MC plains bright)
+            } else if (t < 0.64) {
+                r=0.32; g=0.64; b=0.18; // lush forest #52A42E (MC forest)
+            } else {
+                r=0.22; g=0.50; b=0.14; // dark forest #388023
+            }
 
             return new THREE.Color(r*jitter, g*jitter, b*jitter);
         };
@@ -319,20 +332,30 @@ const World = {
         const mJungleLog  = new THREE.MeshStandardMaterial({ color: 0x6B4A20 });
         const mJungleLeaf = new THREE.MeshStandardMaterial({ color: 0x2E8B2E });
 
+        // Cherry blossom — MC 1.20 style pink
+        const mCherryLog  = new THREE.MeshStandardMaterial({ color: 0x8B4565 });
+        const mCherryLeaf = new THREE.MeshStandardMaterial({
+            color: 0xF4A8C8, emissive: 0x3A0A18, emissiveIntensity: 0.08
+        });
+
         // Tree position list: [x, z, type, trunkH]
-        // type: 0=oak, 1=birch, 2=spruce, 3=jungle
+        // type: 0=oak, 1=birch, 2=spruce, 3=jungle, 4=cherry
         const trees = [
             [-15,-12, 0,4], [18,8,   1,6], [-8,20,  2,8], [12,-18, 0,4],
             [-20,5,   2,9], [5,-22,  1,5], [22,22,  0,5], [-18,-22,3,7],
             [55,40,   0,6], [-60,45, 2,8], [70,-30, 1,6], [-50,-55,0,5],
-            [45,-65,  2,9], [-70,35, 0,6], [80,20,  1,5], [-55,-30,3,8],
+            [45,-65,  2,9], [-70,35, 0,6], [55,20,  1,5], [-55,-30,3,8],
             [-30,-15, 1,6], [25,-30, 2,8], [-10,-35,0,5], [35,15,  3,7],
             [-40,10,  0,6], [50,-20, 1,5], [-65,-15,2,9], [40,50,  3,8],
             [65,-50,  0,6], [-55,50, 1,6], [15,45,  2,7], [-35,-60,0,5],
-            [75,40,   2,8], [-45,25, 0,5], [30,-45, 3,7], [-20,-45,1,5],
-            [-50,-25, 3,9], [60,25,  2,8], [-30,45, 0,6], [50,-45, 2,9],
-            [-75,-35, 1,6], [75,-15, 0,5], [-60,55, 3,8], [65,60,  2,7],
-            [-40,-55, 0,6], [45,55,  1,5], [-70,0,  3,9], [80,-40, 2,8]
+            [60,40,   2,8], [-45,25, 0,5], [30,-45, 3,7], [-20,-45,1,5],
+            [-50,-25, 3,9], [55,25,  2,8], [-30,45, 0,6], [50,-45, 2,9],
+            [-75,-35, 1,6], [60,-15, 0,5], [-60,55, 3,8], [50,60,  2,7],
+            [-40,-55, 0,6], [45,55,  1,5], [-70,0,  3,9], [55,-40, 2,8],
+            // Cherry blossom grove near (-30,-30)
+            [-28,-28, 4,4], [-32,-24, 4,5], [-26,-34, 4,4], [-36,-30, 4,5],
+            [-22,-28, 4,4], [-30,-36, 4,6], [-34,-22, 4,4], [-24,-32, 4,5],
+            [-38,-26, 4,4], [-26,-22, 4,5]
         ];
 
         const makeOak = (g, trunkH, logM, leafM) => {
@@ -395,10 +418,14 @@ const World = {
             const g = new THREE.Group();
             let crownW;
 
-            if      (type === 0) crownW = makeOak   (g, trunkH,       mOakLog,   mOakLeaf);
-            else if (type === 1) crownW = makeBirch (g, trunkH,       mBirchLog, mBirchLeaf);
-            else if (type === 2) crownW = makeSpruce(g, trunkH,       mSpruceLog,mSpruceLeaf);
-            else                 crownW = makeJungle(g, trunkH,       mJungleLog,mJungleLeaf);
+            if      (type === 0) crownW = makeOak   (g, trunkH, mOakLog,   mOakLeaf);
+            else if (type === 1) crownW = makeBirch (g, trunkH, mBirchLog, mBirchLeaf);
+            else if (type === 2) crownW = makeSpruce(g, trunkH, mSpruceLog,mSpruceLeaf);
+            else if (type === 3) crownW = makeJungle(g, trunkH, mJungleLog,mJungleLeaf);
+            else {
+                // Cherry blossom: round crown like oak but PINK
+                crownW = makeOak(g, trunkH, mCherryLog, mCherryLeaf);
+            }
 
             g.position.set(x, groundY, z);
             GAME.scene.add(g);
@@ -541,11 +568,14 @@ const World = {
     },
 
     _createLake() {
-        // Main lake — expanded to 16x16
-        const lake = new THREE.Mesh(
-            new THREE.BoxGeometry(16, 0.3, 16),
-            new THREE.MeshStandardMaterial({ color: 0x87ceeb, transparent: true, opacity: 0.6, roughness: 0.1, metalness: 0.1 })
-        );
+        // Main lake — MC vivid aqua water
+        const waterMat = new THREE.MeshStandardMaterial({
+            color: 0x3FB8D8,   // vivid MC aqua
+            transparent: true, opacity: 0.72,
+            roughness: 0.05, metalness: 0.3,
+            emissive: 0x1A5878, emissiveIntensity: 0.12
+        });
+        const lake = new THREE.Mesh(new THREE.BoxGeometry(16, 0.3, 16), waterMat);
         lake.position.set(10, 0.05, 10);
         lake.receiveShadow = true;
         GAME.scene.add(lake);
@@ -1238,17 +1268,22 @@ const World = {
     // === PHASE 3: Castle (Disney-style) ===
     _createCastle() {
         // ── Disney-style MC castle on raised hill ──────────────────
-        const cx = 85, cz = 80;
-        const HILL_H = 6; // castle sits on a 6-unit hill
+        const cx = 42, cz = 42; // moved from (85,80) → ~59 units from spawn, visible
+        const HILL_H = 10; // tall hill — visible from far away
 
-        // Build the hill — explicit green colour so it looks like MC grass
-        const hillMat = new THREE.MeshStandardMaterial({ color: 0x4a8a30 });
+        // Build the hill — vivid MC green, tall pyramid
+        const hillMat  = new THREE.MeshStandardMaterial({ color: 0x5C9A2C }); // MC plains green
+        const hillMat2 = new THREE.MeshStandardMaterial({ color: 0x4A8020 }); // slightly darker mid
+        const hillMat3 = new THREE.MeshStandardMaterial({ color: 0x7A6040 }); // dirt sides
         const hillLayers = [
-            { w: 36, h: 2 }, { w: 28, h: 2 }, { w: 22, h: 2 }
+            { w: 44, h: 2.5, m: hillMat  },
+            { w: 34, h: 2.5, m: hillMat2 },
+            { w: 26, h: 2.5, m: hillMat  },
+            { w: 18, h: 2.5, m: hillMat2 },
         ];
         let yOff = 0;
         hillLayers.forEach(l => {
-            const hm = new THREE.Mesh(new THREE.BoxGeometry(l.w, l.h, l.w), hillMat);
+            const hm = new THREE.Mesh(new THREE.BoxGeometry(l.w, l.h, l.w), l.m || hillMat);
             hm.position.set(cx, yOff + l.h/2, cz);
             hm.receiveShadow = true; hm.castShadow = true;
             GAME.scene.add(hm);
