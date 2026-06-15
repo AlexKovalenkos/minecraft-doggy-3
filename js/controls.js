@@ -111,7 +111,8 @@ const Controls = {
         });
 
         document.addEventListener('mousedown', () => {
-            if (GAME.started && !document.pointerLockElement) {
+            // Don't grab pointer lock while pause menu is open
+            if (GAME.started && !GAME.paused && !document.pointerLockElement) {
                 GAME.renderer.domElement.requestPointerLock();
             }
         });

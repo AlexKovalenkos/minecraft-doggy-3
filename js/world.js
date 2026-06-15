@@ -285,79 +285,128 @@ const World = {
         this._addSnowAndStone();
         this._addWaterfall();
         this._addGlowingMushrooms();
+        this._addMCGrass();
     },
 
     _createTrees() {
-        // All tree positions [x, z, trunkBlocks]
-        const treeList = [
-            [-15,-12,4],[18,8,4],[-8,20,5],[12,-18,4],
-            [-20,5,5],[5,-22,4],[22,22,5],[-18,-22,4],
-            [55,40,6],[-60,45,6],[70,-30,5],[-50,-55,6],
-            [45,-65,5],[-70,35,6],[80,20,5],[-55,-30,5],
-            [-30,-15,6],[25,-30,5],[-10,-35,6],[35,15,5],
-            [-40,10,6],[50,-20,5],[-65,-15,6],[40,50,6],
-            [65,-50,6],[-55,50,6],[15,45,5],[-35,-60,6],
-            [75,40,6],[-45,25,5],[30,-45,6],[-20,-45,5],
-            [-50,-25,7],[60,25,6],[-30,45,6],[50,-45,6],
-            [-75,-35,7],[75,-15,6],[-60,55,7],[65,60,7],
-            [-40,-55,7],[45,55,6],[-70,0,7],[80,-40,6]
+        // ── 4 Minecraft tree types ──────────────────────────────────
+        // OAK: medium, round green crown
+        // BIRCH: tall thin, white trunk, small yellow-green leaves
+        // SPRUCE: tall conical, dark green layers (like MC spruce/pine)
+        // JUNGLE: very tall, thick trunk, dense bright leaves
+
+        const B = 1.0; // 1 block
+
+        // Shared textures
+        const oakLogTex   = this._mkOakLog();
+        const oakLeafTex  = this._mkOakLeaves();
+        oakLogTex.wrapS   = oakLogTex.wrapT = THREE.RepeatWrapping;
+        oakLeafTex.wrapS  = oakLeafTex.wrapT = THREE.RepeatWrapping;
+
+        const mOakLog   = new THREE.MeshStandardMaterial({ map: oakLogTex });
+        const mOakLeaf  = new THREE.MeshStandardMaterial({ map: oakLeafTex });
+
+        // Birch trunk — white/light grey bark
+        const mBirchLog = new THREE.MeshStandardMaterial({ color: 0xD8D0B8 });
+        // Birch leaves — lighter yellow-green
+        const mBirchLeaf = new THREE.MeshStandardMaterial({ color: 0x7DB84A });
+
+        // Spruce — dark trunk, very dark needle-green
+        const mSpruceLog  = new THREE.MeshStandardMaterial({ color: 0x5a3a1a });
+        const mSpruceLeaf = new THREE.MeshStandardMaterial({ color: 0x2B5A1A });
+
+        // Jungle — thick trunk, bright tropical green
+        const mJungleLog  = new THREE.MeshStandardMaterial({ color: 0x6B4A20 });
+        const mJungleLeaf = new THREE.MeshStandardMaterial({ color: 0x2E8B2E });
+
+        // Tree position list: [x, z, type, trunkH]
+        // type: 0=oak, 1=birch, 2=spruce, 3=jungle
+        const trees = [
+            [-15,-12, 0,4], [18,8,   1,6], [-8,20,  2,8], [12,-18, 0,4],
+            [-20,5,   2,9], [5,-22,  1,5], [22,22,  0,5], [-18,-22,3,7],
+            [55,40,   0,6], [-60,45, 2,8], [70,-30, 1,6], [-50,-55,0,5],
+            [45,-65,  2,9], [-70,35, 0,6], [80,20,  1,5], [-55,-30,3,8],
+            [-30,-15, 1,6], [25,-30, 2,8], [-10,-35,0,5], [35,15,  3,7],
+            [-40,10,  0,6], [50,-20, 1,5], [-65,-15,2,9], [40,50,  3,8],
+            [65,-50,  0,6], [-55,50, 1,6], [15,45,  2,7], [-35,-60,0,5],
+            [75,40,   2,8], [-45,25, 0,5], [30,-45, 3,7], [-20,-45,1,5],
+            [-50,-25, 3,9], [60,25,  2,8], [-30,45, 0,6], [50,-45, 2,9],
+            [-75,-35, 1,6], [75,-15, 0,5], [-60,55, 3,8], [65,60,  2,7],
+            [-40,-55, 0,6], [45,55,  1,5], [-70,0,  3,9], [80,-40, 2,8]
         ];
 
-        // Minecraft oak log texture (pixel art)
-        const logTex = this._mkOakLog();
-        logTex.wrapS = logTex.wrapT = THREE.RepeatWrapping;
-        const logMat = new THREE.MeshStandardMaterial({ map: logTex });
+        const makeOak = (g, trunkH, logM, leafM) => {
+            const trunk = new THREE.Mesh(new THREE.BoxGeometry(B, trunkH, B), logM);
+            trunk.position.y = trunkH/2; trunk.castShadow = true; g.add(trunk);
+            // 2 wide layers (5×5) + 1 narrow top (3×3)
+            [0, B].forEach(ly => {
+                const l = new THREE.Mesh(new THREE.BoxGeometry(5*B, B, 5*B), leafM);
+                l.position.y = trunkH + ly + B/2; l.castShadow = true; g.add(l);
+            });
+            const top = new THREE.Mesh(new THREE.BoxGeometry(3*B, 1.5*B, 3*B), leafM);
+            top.position.y = trunkH + 2*B + 0.75*B; top.castShadow = true; g.add(top);
+            return 5*B;
+        };
 
-        const leavesTex = this._mkOakLeaves();
-        leavesTex.wrapS = leavesTex.wrapT = THREE.RepeatWrapping;
-        const leafMat = new THREE.MeshStandardMaterial({ map: leavesTex });
+        const makeBirch = (g, trunkH, logM, leafM) => {
+            const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.6*B, trunkH, 0.6*B), logM);
+            trunk.position.y = trunkH/2; trunk.castShadow = true; g.add(trunk);
+            // Small crown: 3×3 bottom, 3×3 mid, 1×1.5 top
+            const l1 = new THREE.Mesh(new THREE.BoxGeometry(3*B, B, 3*B), leafM);
+            l1.position.y = trunkH + B/2; l1.castShadow = true; g.add(l1);
+            const l2 = new THREE.Mesh(new THREE.BoxGeometry(2*B, B, 2*B), leafM);
+            l2.position.y = trunkH + 1.5*B; l2.castShadow = true; g.add(l2);
+            const top = new THREE.Mesh(new THREE.BoxGeometry(B, B, B), leafM);
+            top.position.y = trunkH + 2.5*B; top.castShadow = true; g.add(top);
+            return 3*B;
+        };
 
-        const B = 1.0; // 1 Minecraft block = 1 unit
+        const makeSpruce = (g, trunkH, logM, leafM) => {
+            const trunk = new THREE.Mesh(new THREE.BoxGeometry(B, trunkH, B), logM);
+            trunk.position.y = trunkH/2; trunk.castShadow = true; g.add(trunk);
+            // Conical layers: wide at bottom, narrow at top (MC spruce)
+            const layers = [5, 5, 4, 3, 3, 2, 2, 1];
+            layers.forEach((w, i) => {
+                if (i * B >= trunkH - B) return; // only above trunk
+                const ly = i > 0 ? i : 0;
+                const l = new THREE.Mesh(new THREE.BoxGeometry(w*B, B, w*B), leafM);
+                l.position.y = trunkH - 1 + ly*B + B/2;
+                l.castShadow = true; g.add(l);
+            });
+            return 5*B;
+        };
 
-        treeList.forEach(([x, z, trunkBlocks]) => {
+        const makeJungle = (g, trunkH, logM, leafM) => {
+            // Thick trunk (2×2 blocks)
+            const trunk = new THREE.Mesh(new THREE.BoxGeometry(2*B, trunkH, 2*B), logM);
+            trunk.position.y = trunkH/2; trunk.castShadow = true; g.add(trunk);
+            // Large dense crown
+            const l1 = new THREE.Mesh(new THREE.BoxGeometry(6*B, 1.5*B, 6*B), leafM);
+            l1.position.y = trunkH + 0.75*B; l1.castShadow = true; g.add(l1);
+            const l2 = new THREE.Mesh(new THREE.BoxGeometry(5*B, B, 5*B), leafM);
+            l2.position.y = trunkH + 2*B; l2.castShadow = true; g.add(l2);
+            const top = new THREE.Mesh(new THREE.BoxGeometry(3*B, 1.5*B, 3*B), leafM);
+            top.position.y = trunkH + 3.5*B; top.castShadow = true; g.add(top);
+            return 6*B;
+        };
+
+        trees.forEach(([x, z, type, trunkH]) => {
             const groundY = this.getTerrainY(x, z);
-            const trunkH  = trunkBlocks * B;
             const g = new THREE.Group();
+            let crownW;
 
-            // Trunk — square oak log (1×1 block cross-section)
-            const trunk = new THREE.Mesh(
-                new THREE.BoxGeometry(B, trunkH, B), logMat
-            );
-            trunk.position.y = trunkH / 2;
-            trunk.castShadow = true;
-            g.add(trunk);
-
-            // Leaves — Minecraft oak pattern: 2 wide layers (5×5) + 1 narrow top (3×3)
-            const leafW = 5 * B;
-            for (let ly = 0; ly < 2; ly++) {
-                const layer = new THREE.Mesh(
-                    new THREE.BoxGeometry(leafW, B, leafW), leafMat
-                );
-                layer.position.y = trunkH + ly * B + B * 0.5;
-                layer.castShadow = true;
-                g.add(layer);
-            }
-            const topLeaf = new THREE.Mesh(
-                new THREE.BoxGeometry(3 * B, B * 1.5, 3 * B), leafMat
-            );
-            topLeaf.position.y = trunkH + 2 * B + B * 0.75;
-            topLeaf.castShadow = true;
-            g.add(topLeaf);
+            if      (type === 0) crownW = makeOak   (g, trunkH,       mOakLog,   mOakLeaf);
+            else if (type === 1) crownW = makeBirch (g, trunkH,       mBirchLog, mBirchLeaf);
+            else if (type === 2) crownW = makeSpruce(g, trunkH,       mSpruceLog,mSpruceLeaf);
+            else                 crownW = makeJungle(g, trunkH,       mJungleLog,mJungleLeaf);
 
             g.position.set(x, groundY, z);
             GAME.scene.add(g);
 
-            // Trunk collision
-            const hw = B / 2;
+            const trunkW = type === 3 ? B : B/2;
             this.collidables.push({ box: new THREE.Box3(
-                new THREE.Vector3(x - hw, groundY, z - hw),
-                new THREE.Vector3(x + hw, groundY + trunkH, z + hw)
-            )});
-            // Leaves block (can land on top)
-            const lhw = leafW / 2;
-            this.collidables.push({ box: new THREE.Box3(
-                new THREE.Vector3(x - lhw, groundY + trunkH - 0.5, z - lhw),
-                new THREE.Vector3(x + lhw, groundY + trunkH + 2 * B + B * 1.5, z + lhw)
+                new THREE.Vector3(x-trunkW, groundY, z-trunkW),
+                new THREE.Vector3(x+trunkW, groundY+trunkH, z+trunkW)
             )});
         });
     },
@@ -781,59 +830,75 @@ const World = {
     },
 
     _createMountains() {
+        // Minecraft-style blocky mountains: bright grey stone + white snow cap
+        // Stone tiers: base=dark grey, mid=medium grey, top=light grey, snow=white
         const mountains = [
-            { x: 60, z: -60, height: 12, base: 8 },
-            { x: -45, z: -40, height: 14, base: 9 },
-            { x: -80, z: 60, height: 10, base: 7 },
-            { x: -80, z: -20, height: 11, base: 8 }
+            { x: 60,  z: -60, height: 14, base: 10 },
+            { x: -45, z: -40, height: 16, base: 11 },
+            { x: -80, z: 60,  height: 12, base:  9 },
+            { x: -80, z: -20, height: 13, base: 10 },
+            { x: 55,  z: 50,  height: 10, base:  8 },
+            { x: -35, z: 65,  height: 11, base:  8 }
         ];
-
-        const rockMat = new THREE.MeshStandardMaterial({ color: 0x8a7d6b });
-        const snowMat = new THREE.MeshStandardMaterial({ color: 0xf0f0ff });
 
         mountains.forEach(m => {
             const g = new THREE.Group();
-            const levels = 6 + Math.floor(Math.random() * 3);
-            const layerH = m.height / levels;
+            const LEVELS = 8;
+            const layerH = m.height / LEVELS;
 
-            for (let i = 0; i < levels; i++) {
-                const fraction = i / levels;
-                const size = m.base * (1 - fraction * 0.7);
-                const isSnow = fraction > 0.6;
-                const block = new THREE.Mesh(
-                    new THREE.BoxGeometry(size, layerH, size),
-                    isSnow ? snowMat : rockMat
-                );
-                block.position.y = i * layerH + layerH / 2;
-                block.castShadow = true;
-                block.receiveShadow = true;
+            for (let i = 0; i < LEVELS; i++) {
+                const frac = i / LEVELS;
+                const size = m.base * (1 - frac * 0.72);
+
+                // Colour: base=dark grey, upper=lighter, top=bright light grey, snow zone=white
+                let col;
+                if (frac > 0.72) col = 0xEEEEF4;          // bright snow grey
+                else if (frac > 0.55) col = 0xB8B8C8;     // light stone
+                else if (frac > 0.30) col = 0x909098;     // medium stone (MC stone)
+                else col = 0x727278;                       // dark base stone
+
+                const mat = new THREE.MeshStandardMaterial({ color: col });
+
+                // Each layer: slightly offset for jagged look
+                const jx = (Math.sin(i*2.3+m.x)*0.25);
+                const jz = (Math.cos(i*1.7+m.z)*0.25);
+
+                const block = new THREE.Mesh(new THREE.BoxGeometry(size, layerH+0.1, size), mat);
+                block.position.set(jx, i*layerH + layerH/2, jz);
+                block.castShadow = true; block.receiveShadow = true;
                 g.add(block);
             }
 
-            const capSize = m.base * 0.15;
-            const cap = new THREE.Mesh(
-                new THREE.BoxGeometry(capSize, layerH * 0.8, capSize),
-                snowMat
-            );
-            cap.position.y = levels * layerH + layerH * 0.4;
-            cap.castShadow = true;
-            g.add(cap);
+            // Snow cap (extra white block on peak)
+            const capMat = new THREE.MeshStandardMaterial({ color: 0xF5F5FF });
+            const cap = new THREE.Mesh(new THREE.BoxGeometry(m.base*0.22, layerH, m.base*0.22), capMat);
+            cap.position.y = LEVELS*layerH + layerH/2;
+            cap.castShadow = true; g.add(cap);
+
+            // Exposed stone cliff faces on sides (darker blocks jutting out)
+            for (let ci = 0; ci < 4; ci++) {
+                const a = (ci/4)*Math.PI*2;
+                const cr = m.base*0.3 + Math.random()*m.base*0.15;
+                const ch = m.height*0.2 + Math.random()*m.height*0.3;
+                const cliffMat = new THREE.MeshStandardMaterial({ color: 0x606068 });
+                const cliff = new THREE.Mesh(
+                    new THREE.BoxGeometry(cr*0.6, ch, cr*0.6), cliffMat
+                );
+                cliff.position.set(Math.cos(a)*m.base*0.45, ch/2, Math.sin(a)*m.base*0.45);
+                cliff.castShadow = true; g.add(cliff);
+            }
 
             g.position.set(m.x, 0, m.z);
             GAME.scene.add(g);
 
-            for (let i = 0; i < levels; i++) {
-                const fraction = i / levels;
-                const size = m.base * (1 - fraction * 0.7);
-                const halfS = size / 2;
-                const yBottom = i * layerH;
-                const yTop = (i + 1) * layerH;
-                this.collidables.push({
-                    box: new THREE.Box3(
-                        new THREE.Vector3(m.x - halfS, yBottom, m.z - halfS),
-                        new THREE.Vector3(m.x + halfS, yTop, m.z + halfS)
-                    )
-                });
+            // Collisions
+            for (let i = 0; i < LEVELS; i++) {
+                const size = m.base * (1 - (i/LEVELS) * 0.72);
+                const hs = size/2;
+                this.collidables.push({ box: new THREE.Box3(
+                    new THREE.Vector3(m.x-hs, i*layerH, m.z-hs),
+                    new THREE.Vector3(m.x+hs, (i+1)*layerH, m.z+hs)
+                )});
             }
         });
     },
@@ -1176,10 +1241,8 @@ const World = {
         const cx = 85, cz = 80;
         const HILL_H = 6; // castle sits on a 6-unit hill
 
-        // Build the hill
-        const hillMat = this._texGrassTop
-            ? new THREE.MeshStandardMaterial({ map: this._texGrassTop })
-            : new THREE.MeshStandardMaterial({ color: 0x5a9a40 });
+        // Build the hill — explicit green colour so it looks like MC grass
+        const hillMat = new THREE.MeshStandardMaterial({ color: 0x4a8a30 });
         const hillLayers = [
             { w: 36, h: 2 }, { w: 28, h: 2 }, { w: 22, h: 2 }
         ];
@@ -2170,6 +2233,79 @@ const World = {
             glow.position.set(x, groundY + 1.2, z);
             GAME.scene.add(glow);
         });
+    },
+
+    _addMCGrass() {
+        // Minecraft-style tall grass tufts scattered across the world
+        // Each tuft = two thin flat boxes in an X cross (like MC grass)
+        const grassColors = [0x5aA830, 0x48992A, 0x6EC038, 0x3D8822, 0x7ACC42];
+        const darkFern    = 0x2E7018;
+
+        const mat1 = new THREE.MeshStandardMaterial({ color: 0x5aA830, side: THREE.DoubleSide });
+
+        // Tall grass patches — 200 tufts scattered away from structures
+        for (let i = 0; i < 220; i++) {
+            const x = (Math.random()-0.5)*180;
+            const z = (Math.random()-0.5)*180;
+            // Skip structure areas
+            if (Math.abs(x)<18&&Math.abs(z)<18) continue;
+            if (Math.abs(x+25)<12&&Math.abs(z-20)<10) continue;
+            if (Math.abs(x-10)<12&&Math.abs(z-10)<12) continue;
+            if (Math.abs(x-85)<22&&Math.abs(z-80)<22) continue;
+
+            const gy = this.getTerrainY(x, z);
+            const col = grassColors[Math.floor(Math.random()*grassColors.length)];
+            const h = 0.35 + Math.random()*0.45;
+            const w = 0.45 + Math.random()*0.3;
+            const gMat = new THREE.MeshStandardMaterial({ color: col, side: THREE.DoubleSide });
+
+            const g = new THREE.Group();
+            // Two flat panels crossing (MC grass style)
+            const p1 = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.03), gMat);
+            const p2 = new THREE.Mesh(new THREE.BoxGeometry(0.03, h, w), gMat);
+            p1.position.y = h/2; p2.position.y = h/2;
+            g.add(p1); g.add(p2);
+            g.position.set(x, gy, z);
+            GAME.scene.add(g);
+        }
+
+        // Ferns (darker, slightly different shape)
+        for (let i = 0; i < 80; i++) {
+            const x = (Math.random()-0.5)*160;
+            const z = (Math.random()-0.5)*160;
+            if (Math.abs(x)<15&&Math.abs(z)<15) continue;
+            if (Math.abs(x-10)<10&&Math.abs(z-10)<10) continue;
+
+            const gy = this.getTerrainY(x, z);
+            const h = 0.5 + Math.random()*0.4;
+            const fMat = new THREE.MeshStandardMaterial({ color: darkFern, side: THREE.DoubleSide });
+            const g = new THREE.Group();
+            // Slightly wider fern shape
+            const p1 = new THREE.Mesh(new THREE.BoxGeometry(0.7, h, 0.03), fMat);
+            const p2 = new THREE.Mesh(new THREE.BoxGeometry(0.03, h, 0.7), fMat);
+            // Fan out at top
+            p1.rotation.z = 0.15; p2.rotation.x = 0.15;
+            p1.position.y = h/2; p2.position.y = h/2;
+            g.add(p1); g.add(p2);
+            g.position.set(x, gy, z);
+            GAME.scene.add(g);
+        }
+
+        // Dead bushes (MC desert bush feel — brown)
+        for (let i = 0; i < 30; i++) {
+            const x = (Math.random()-0.5)*140;
+            const z = (Math.random()-0.5)*140;
+            if (Math.abs(x)<12&&Math.abs(z)<12) continue;
+            const gy = this.getTerrainY(x, z);
+            const bMat = new THREE.MeshStandardMaterial({ color: 0x8B6040, side: THREE.DoubleSide });
+            const g = new THREE.Group();
+            [0.3, 0.6, 0.9].forEach((h, j) => {
+                const p = new THREE.Mesh(new THREE.BoxGeometry(0.5-j*0.1, 0.08, 0.5-j*0.1), bMat);
+                p.position.y = h; g.add(p);
+            });
+            g.position.set(x, gy, z);
+            GAME.scene.add(g);
+        }
     },
 
     update(dt) {
