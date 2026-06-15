@@ -1,13 +1,5 @@
 // ============================================================
-// controls.js — Управление и камера
-//
-// ВАЖНО — рабочие формулы:
-//   yaw -= movementX * 0.003
-//   cameraPitch += movementY * 0.003
-//   forward = (sin(yaw), cos(yaw))
-//   A += rightX, D -= rightX  (SWAPPED)
-//   model rotation = yaw - PI/2
-//   camera behind = pos - sin(yaw)*dist, pos - cos(yaw)*dist
+// controls.js — Управление и камера (MC-style physics)
 // ============================================================
 
 const Controls = {
@@ -18,15 +10,29 @@ const Controls = {
     _lookTarget: new THREE.Vector3(0, 2.6, 0),
     _lookGoal: new THREE.Vector3(),
     _wasInWater: false,
-
     _lastMouseX: null,
     _lastMouseY: null,
+
+    // Sprint
+    _sprinting: false,
+
+    // Camera bob
+    _bobPhase: 0,
+    _bobAmount: 0,
+
+    // Dog sit timer
+    _idleTimer: 0,
+    _dogSitting: false,
+
+    // Surface type for footstep sounds
+    _lastSurface: 'grass',
+    _stepTimer: 0,
 
     init() {
         document.addEventListener('keydown', e => {
             this.keys[e.code] = true;
 
-            if (['KeyQ','KeyE','KeyZ','KeyX','KeyR','Space'].includes(e.code)) {
+            if (['KeyQ','KeyE','KeyZ','KeyX','KeyR','Space','ControlLeft','ControlRight'].includes(e.code)) {
                 e.preventDefault();
             }
 
@@ -37,19 +43,20 @@ const Controls = {
             if (e.code === 'KeyZ') Items.placeBlock();
             if (e.code === 'KeyX') Items.removeBlock();
 
+            // Sprint toggle with Ctrl
+            if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
+                this._sprinting = true;
+            }
+
             // R — toggle dragon riding
             if (e.code === 'KeyR') {
                 if (Dog.ridingDragon) {
-                    // Dismount
                     Dog.ridingDragon = null;
                 } else {
-                    // Try to mount tamed dragon nearby
                     NPCs.dragons.forEach(dr => {
                         if (!dr.userData.tamed) return;
                         const dist = Dog.group.position.distanceTo(dr.position);
-                        if (dist < 4 && !Dog.ridingDragon) {
-                            Dog.ridingDragon = dr;
-                        }
+                        if (dist < 4 && !Dog.ridingDragon) Dog.ridingDragon = dr;
                     });
                 }
             }
@@ -65,25 +72,22 @@ const Controls = {
 
         document.addEventListener('keyup', e => {
             this.keys[e.code] = false;
+            if (e.code === 'ControlLeft' || e.code === 'ControlRight') {
+                this._sprinting = false;
+            }
         });
 
-        // Mouse/trackpad — works with AND without pointer lock
         document.addEventListener('mousemove', e => {
             if (!GAME.started) return;
             let dx, dy;
             if (document.pointerLockElement) {
-                // Pointer lock active — use movementX/Y
                 dx = e.movementX || 0;
                 dy = e.movementY || 0;
             } else {
-                // No pointer lock — compute delta from last position (trackpad touch)
                 if (this._lastMouseX !== null) {
                     dx = e.clientX - this._lastMouseX;
                     dy = e.clientY - this._lastMouseY;
-                } else {
-                    dx = 0;
-                    dy = 0;
-                }
+                } else { dx = 0; dy = 0; }
                 this._lastMouseX = e.clientX;
                 this._lastMouseY = e.clientY;
             }
@@ -92,7 +96,6 @@ const Controls = {
             this.cameraPitch = Math.max(-0.3, Math.min(1.2, this.cameraPitch));
         });
 
-        // Reset last mouse pos when pointer leaves/enters to avoid jumps
         document.addEventListener('mouseleave', () => {
             this._lastMouseX = null;
             this._lastMouseY = null;
@@ -104,13 +107,19 @@ const Controls = {
             }
         });
 
+        // Pause menu
+        document.addEventListener('keydown', e => {
+            if (e.code === 'Escape' && GAME.started) {
+                this._togglePause();
+            }
+        });
+
         document.getElementById('startBtn').addEventListener('click', () => {
             GAME.started = true;
             document.getElementById('startScreen').style.display = 'none';
             document.getElementById('hud').style.display = 'flex';
             document.getElementById('hotbar').style.display = 'flex';
             document.getElementById('crosshair').style.display = 'block';
-
             GAME.renderer.domElement.requestPointerLock();
 
             const camDist = 8;
@@ -122,26 +131,76 @@ const Controls = {
             GAME.camera.lookAt(Dog.group.position.x, Dog.group.position.y + 1, Dog.group.position.z);
             this._lookTarget.set(Dog.group.position.x, Dog.group.position.y + 1, Dog.group.position.z);
         });
+
+        this._buildPauseMenu();
+    },
+
+    _buildPauseMenu() {
+        const overlay = document.createElement('div');
+        overlay.id = 'pauseMenu';
+        overlay.style.cssText = `
+            display:none; position:fixed; top:0; left:0; width:100%; height:100%;
+            background:rgba(0,0,0,0.5); z-index:200; pointer-events:all;
+            flex-direction:column; align-items:center; justify-content:center; gap:12px;
+        `;
+        overlay.innerHTML = `
+            <div style="color:#ffff55;font-size:20px;font-family:'Press Start 2P',monospace;
+                text-shadow:3px 3px 0 #555500;margin-bottom:20px;">ПАУЗА</div>
+            <button class="mc-btn" id="pauseResume">Продолжить</button>
+            <button class="mc-btn" id="pauseQuit">Выйти в меню</button>
+        `;
+        document.body.appendChild(overlay);
+
+        const style = document.createElement('style');
+        style.textContent = `.mc-btn {
+            padding:10px 36px; font-size:10px; font-family:'Press Start 2P',monospace;
+            background:#5a7a5a; color:#fff; border:none; cursor:pointer; pointer-events:all;
+            border-top:2px solid #8aaa8a; border-left:2px solid #8aaa8a;
+            border-right:2px solid #2a4a2a; border-bottom:2px solid #2a4a2a;
+            text-shadow:1px 1px 0 #000; letter-spacing:1px;
+        }
+        .mc-btn:hover { filter:brightness(1.25); }`;
+        document.head.appendChild(style);
+
+        document.getElementById('pauseResume').addEventListener('click', () => this._togglePause());
+        document.getElementById('pauseQuit').addEventListener('click', () => {
+            this._togglePause();
+            GAME.started = false;
+            document.getElementById('startScreen').style.display = 'flex';
+        });
+
+        this._pauseOverlay = overlay;
+    },
+
+    _togglePause() {
+        GAME.paused = !GAME.paused;
+        this._pauseOverlay.style.display = GAME.paused ? 'flex' : 'none';
+        if (GAME.paused) {
+            document.exitPointerLock();
+        } else {
+            GAME.renderer.domElement.requestPointerLock();
+        }
     },
 
     update(dt) {
-        // === Dragon riding mode ===
-        if (Dog.ridingDragon) {
-            return this._updateDragonRide(dt);
-        }
+        if (GAME.paused) return false;
+
+        if (Dog.ridingDragon) return this._updateDragonRide(dt);
 
         const pos = Dog.group.position;
+        const isSprinting = this._sprinting && Dog.onGround;
+        const speedMult = Dog.inWater ? 0.6 : isSprinting ? 1.5 : 1.0;
 
         const forwardX = Math.sin(Dog.yaw);
         const forwardZ = Math.cos(Dog.yaw);
-        const rightX = Math.cos(Dog.yaw);
-        const rightZ = -Math.sin(Dog.yaw);
+        const rightX   = Math.cos(Dog.yaw);
+        const rightZ   = -Math.sin(Dog.yaw);
 
         let mx = 0, mz = 0;
-        if (this.keys['KeyW'] || this.keys['ArrowUp'])    { mx += forwardX; mz += forwardZ; }
-        if (this.keys['KeyS'] || this.keys['ArrowDown'])   { mx -= forwardX; mz -= forwardZ; }
-        if (this.keys['KeyA'] || this.keys['ArrowLeft'])   { mx += rightX;   mz += rightZ; }
-        if (this.keys['KeyD'] || this.keys['ArrowRight'])  { mx -= rightX;   mz -= rightZ; }
+        if (this.keys['KeyW'] || this.keys['ArrowUp'])   { mx += forwardX; mz += forwardZ; }
+        if (this.keys['KeyS'] || this.keys['ArrowDown'])  { mx -= forwardX; mz -= forwardZ; }
+        if (this.keys['KeyA'] || this.keys['ArrowLeft'])  { mx += rightX;   mz += rightZ; }
+        if (this.keys['KeyD'] || this.keys['ArrowRight']) { mx -= rightX;   mz -= rightZ; }
 
         const isMoving = (mx * mx + mz * mz) > 0.01;
         if (isMoving) {
@@ -149,6 +208,7 @@ const Controls = {
             mx /= len; mz /= len;
         }
 
+        // === Fly / gravity ===
         if (this.keys['Space']) {
             Dog.isFlying = true;
             Dog.vy = Dog.flySpeed;
@@ -162,78 +222,102 @@ const Controls = {
             Dog.vy = 0;
         }
 
-        // Water slowdown
-        let speedMult = 1;
-        if (Dog.inWater && Dog.onGround) {
-            speedMult = 0.6;
-        }
-
         pos.x += mx * Dog.speed * speedMult * dt;
         pos.z += mz * Dog.speed * speedMult * dt;
         pos.y += Dog.vy * dt;
 
-        // --- COLLISION DETECTION ---
-        const dogRadius = 0.8;
+        // === Dog sit/stand logic ===
+        if (isMoving || !Dog.onGround) {
+            this._idleTimer = 0;
+            if (this._dogSitting) {
+                this._dogSitting = false;
+                Dog.sitting = false;
+            }
+        } else if (Dog.onGround) {
+            this._idleTimer += dt;
+            if (this._idleTimer > 3.0 && !this._dogSitting) {
+                this._dogSitting = true;
+                Dog.sitting = true;
+            }
+        }
+
+        // === Camera bob ===
+        if (isMoving && Dog.onGround) {
+            this._bobPhase += dt * (isSprinting ? 14 : 10);
+            this._bobAmount = Math.sin(this._bobPhase) * (isSprinting ? 0.12 : 0.07);
+        } else {
+            this._bobAmount *= 0.85; // decay
+        }
+
+        // === Footstep sounds ===
+        if (isMoving && Dog.onGround) {
+            const stepInterval = isSprinting ? 0.28 : 0.42;
+            this._stepTimer += dt;
+            if (this._stepTimer >= stepInterval) {
+                this._stepTimer = 0;
+                const surface = Dog.inWater ? 'water'
+                    : (World.getTerrainY && World.getTerrainY(pos.x, pos.z) > 0.5) ? 'grass' : 'grass';
+                Sounds.step(surface);
+            }
+        } else {
+            this._stepTimer = 0;
+        }
+
+        // === COLLISION DETECTION ===
+        const dogRadius   = 0.8;
         const groundOffset = 1.6;
-        // Start surfaceY from terrain height at current position (Minecraft-style terrain follow)
         let surfaceY = World.getTerrainY ? World.getTerrainY(pos.x, pos.z) : 0;
 
-        // Tree/foliage/building collisions
         World.collidables.forEach(c => {
             const box = c.box;
             const overlapX = pos.x + dogRadius > box.min.x && pos.x - dogRadius < box.max.x;
             const overlapZ = pos.z + dogRadius > box.min.z && pos.z - dogRadius < box.max.z;
-
             if (overlapX && overlapZ) {
                 const dogFeetY = pos.y - groundOffset;
-                const dogTopY = pos.y + 0.7;
-
+                const dogTopY  = pos.y + 0.7;
                 if (Dog.vy <= 0 && dogFeetY <= box.max.y && dogFeetY >= box.max.y - 0.5) {
                     if (box.max.y > surfaceY) surfaceY = box.max.y;
-                }
-                else if (dogFeetY < box.max.y && dogTopY > box.min.y) {
+                } else if (dogFeetY < box.max.y && dogTopY > box.min.y) {
                     const pushRight = pos.x + dogRadius - box.min.x;
-                    const pushLeft = box.max.x - (pos.x - dogRadius);
-                    const pushBack = pos.z + dogRadius - box.min.z;
+                    const pushLeft  = box.max.x - (pos.x - dogRadius);
+                    const pushBack  = pos.z + dogRadius - box.min.z;
                     const pushFront = box.max.z - (pos.z - dogRadius);
                     const minPush = Math.min(pushLeft, pushRight, pushFront, pushBack);
                     if (minPush === pushRight) pos.x = box.min.x - dogRadius;
-                    else if (minPush === pushLeft) pos.x = box.max.x + dogRadius;
-                    else if (minPush === pushBack) pos.z = box.min.z - dogRadius;
+                    else if (minPush === pushLeft)  pos.x = box.max.x + dogRadius;
+                    else if (minPush === pushBack)  pos.z = box.min.z - dogRadius;
                     else pos.z = box.max.z + dogRadius;
                 }
             }
         });
 
-        // Placed blocks collision
         Items.placedBlocks.forEach(b => {
             const bPos = b.mesh.position;
             const half = GAME.BLOCK_SIZE / 2;
-            const bMin = { x: bPos.x - half, y: bPos.y - half, z: bPos.z - half };
-            const bMax = { x: bPos.x + half, y: bPos.y + half, z: bPos.z + half };
+            const bMin = { x: bPos.x-half, y: bPos.y-half, z: bPos.z-half };
+            const bMax = { x: bPos.x+half, y: bPos.y+half, z: bPos.z+half };
             const overlapX = pos.x + dogRadius > bMin.x && pos.x - dogRadius < bMax.x;
             const overlapZ = pos.z + dogRadius > bMin.z && pos.z - dogRadius < bMax.z;
-
             if (overlapX && overlapZ) {
                 const dogFeetY = pos.y - groundOffset;
-                const dogTopY = pos.y + 0.7;
+                const dogTopY  = pos.y + 0.7;
                 if (Dog.vy <= 0 && dogFeetY <= bMax.y && dogFeetY >= bMax.y - 0.5) {
                     if (bMax.y > surfaceY) surfaceY = bMax.y;
                 } else if (dogFeetY < bMax.y && dogTopY > bMin.y) {
                     const pushRight = pos.x + dogRadius - bMin.x;
-                    const pushLeft = bMax.x - (pos.x - dogRadius);
-                    const pushBack = pos.z + dogRadius - bMin.z;
+                    const pushLeft  = bMax.x - (pos.x - dogRadius);
+                    const pushBack  = pos.z + dogRadius - bMin.z;
                     const pushFront = bMax.z - (pos.z - dogRadius);
                     const minPush = Math.min(pushLeft, pushRight, pushFront, pushBack);
                     if (minPush === pushRight) pos.x = bMin.x - dogRadius;
-                    else if (minPush === pushLeft) pos.x = bMax.x + dogRadius;
-                    else if (minPush === pushBack) pos.z = bMin.z - dogRadius;
+                    else if (minPush === pushLeft)  pos.x = bMax.x + dogRadius;
+                    else if (minPush === pushBack)  pos.z = bMin.z - dogRadius;
                     else pos.z = bMax.z + dogRadius;
                 }
             }
         });
 
-        // Unicorn riding (tamed only)
+        // Unicorn riding
         Dog.ridingUnicorn = null;
         NPCs.unicorns.forEach(u => {
             if (!u.userData.tamed) return;
@@ -243,15 +327,12 @@ const Controls = {
                 const uTopY = u.position.y + 0.65;
                 const dogFeetY = pos.y - groundOffset;
                 if (Dog.vy <= 0 && dogFeetY <= uTopY && dogFeetY >= uTopY - 0.8) {
-                    if (uTopY > surfaceY) {
-                        surfaceY = uTopY;
-                        Dog.ridingUnicorn = u;
-                    }
+                    if (uTopY > surfaceY) { surfaceY = uTopY; Dog.ridingUnicorn = u; }
                 }
             }
         });
 
-        // Rainbow bridge (formula-based smooth surface)
+        // Rainbow bridge
         if (World.bridge) {
             const b = World.bridge;
             const dz = Math.abs(pos.z - b.cz);
@@ -265,7 +346,6 @@ const Controls = {
             }
         }
 
-        // Ground/surface landing
         const effectiveGround = surfaceY + groundOffset;
         if (pos.y <= effectiveGround) {
             pos.y = effectiveGround;
@@ -275,20 +355,14 @@ const Controls = {
             Dog.onGround = false;
         }
 
-        // Water in-water check
-        if (Dog.onGround && surfaceY < 0.01) {
+        // Water check
+        if (Dog.onGround && surfaceY < 0.5) {
             let inWater = false;
             World.waterZones.forEach(wz => {
-                if (Math.abs(pos.x - wz.cx) < wz.halfW && Math.abs(pos.z - wz.cz) < wz.halfD) {
-                    inWater = true;
-                }
+                if (Math.abs(pos.x - wz.cx) < wz.halfW && Math.abs(pos.z - wz.cz) < wz.halfD) inWater = true;
             });
-            if (inWater && !this._wasInWater) {
-                Sounds.splash();
-            }
-            if (!inWater && this._wasInWater) {
-                Sounds.splash();
-            }
+            if (inWater && !this._wasInWater) Sounds.splash();
+            if (!inWater && this._wasInWater) Sounds.splash();
             this._wasInWater = inWater;
             Dog.inWater = inWater;
         } else {
@@ -297,14 +371,12 @@ const Controls = {
         }
 
         if (pos.y > GAME.MAX_HEIGHT) { pos.y = GAME.MAX_HEIGHT; Dog.vy = 0; }
-
         const bound = GAME.WORLD_SIZE - 2;
         pos.x = Math.max(-bound, Math.min(bound, pos.x));
         pos.z = Math.max(-bound, Math.min(bound, pos.z));
 
         Dog.group.rotation.y = Dog.yaw - Math.PI / 2;
 
-        // Throne check
         if (World.thronePos) {
             const tp = World.thronePos;
             const dx = Math.abs(pos.x - tp.x);
@@ -313,57 +385,61 @@ const Controls = {
             Dog.onThrone = (dx < 1.5 && dz < 1.5 && Math.abs(dogFeetY - tp.y) < 0.5);
         }
 
+        // Portal check (dance floor / portal defined in world)
+        if (World.portalPos) {
+            const pp = World.portalPos;
+            const d = Math.sqrt((pos.x-pp.x)**2 + (pos.z-pp.z)**2);
+            if (d < 2.5 && !this._portalCooldown) {
+                this._portalCooldown = true;
+                setTimeout(() => { this._portalCooldown = false; }, 3000);
+                // Teleport to lake
+                pos.x = 10; pos.z = 10;
+                pos.y = 5;
+                Effects.showMessage('✨ Телепортация к озеру!');
+                Sounds.portal && Sounds.portal();
+            }
+        }
+
         return isMoving;
     },
 
     _updateDragonRide(dt) {
+        if (GAME.paused) return false;
         const dragon = Dog.ridingDragon;
         const pos = dragon.position;
 
         const forwardX = Math.sin(Dog.yaw);
         const forwardZ = Math.cos(Dog.yaw);
-        const rightX = Math.cos(Dog.yaw);
-        const rightZ = -Math.sin(Dog.yaw);
+        const rightX   = Math.cos(Dog.yaw);
+        const rightZ   = -Math.sin(Dog.yaw);
 
         let mx = 0, mz = 0;
-        if (this.keys['KeyW'] || this.keys['ArrowUp'])    { mx += forwardX; mz += forwardZ; }
-        if (this.keys['KeyS'] || this.keys['ArrowDown'])   { mx -= forwardX; mz -= forwardZ; }
-        if (this.keys['KeyA'] || this.keys['ArrowLeft'])   { mx += rightX;   mz += rightZ; }
-        if (this.keys['KeyD'] || this.keys['ArrowRight'])  { mx -= rightX;   mz -= rightZ; }
+        if (this.keys['KeyW'] || this.keys['ArrowUp'])   { mx += forwardX; mz += forwardZ; }
+        if (this.keys['KeyS'] || this.keys['ArrowDown'])  { mx -= forwardX; mz -= forwardZ; }
+        if (this.keys['KeyA'] || this.keys['ArrowLeft'])  { mx += rightX;   mz += rightZ; }
+        if (this.keys['KeyD'] || this.keys['ArrowRight']) { mx -= rightX;   mz -= rightZ; }
 
         const isMoving = (mx * mx + mz * mz) > 0.01;
-        if (isMoving) {
-            const len = Math.sqrt(mx * mx + mz * mz);
-            mx /= len; mz /= len;
-        }
+        if (isMoving) { const l = Math.sqrt(mx*mx+mz*mz); mx/=l; mz/=l; }
 
-        const dragonSpeed = 12;
+        const dragonSpeed = this._sprinting ? 18 : 12;
         pos.x += mx * dragonSpeed * dt;
         pos.z += mz * dragonSpeed * dt;
-
-        // Vertical
-        if (this.keys['Space']) {
-            pos.y += 8 * dt;
-        } else if (this.keys['ShiftLeft'] || this.keys['ShiftRight']) {
-            pos.y -= 8 * dt;
-        }
+        if (this.keys['Space']) pos.y += 8 * dt;
+        else if (this.keys['ShiftLeft'] || this.keys['ShiftRight']) pos.y -= 8 * dt;
         pos.y = Math.max(2.0, Math.min(GAME.MAX_HEIGHT, pos.y));
 
         const bound = GAME.WORLD_SIZE - 2;
         pos.x = Math.max(-bound, Math.min(bound, pos.x));
         pos.z = Math.max(-bound, Math.min(bound, pos.z));
 
-        // Dragon faces movement direction
         dragon.rotation.y = Dog.yaw;
-
-        // Dog sits on dragon
         Dog.group.position.set(pos.x, pos.y + 2.5, pos.z);
         Dog.group.rotation.y = Dog.yaw - Math.PI / 2;
         Dog.onGround = false;
         Dog.isFlying = true;
         Dog.onThrone = false;
         Dog.inWater = false;
-
         return isMoving;
     },
 
@@ -373,10 +449,12 @@ const Controls = {
 
         const cx = pos.x - Math.sin(Dog.yaw) * baseCamDist * Math.cos(this.cameraPitch);
         const cz = pos.z - Math.cos(Dog.yaw) * baseCamDist * Math.cos(this.cameraPitch);
-        const cy = pos.y + baseCamDist * Math.sin(this.cameraPitch) + 2;
+        // Add camera bob offset to Y
+        const cy = pos.y + baseCamDist * Math.sin(this.cameraPitch) + 2 + this._bobAmount;
 
         this._camTarget.set(cx, cy, cz);
-        const smoothFactor = 1 - Math.exp(-8 * dt);
+        // Tighter smoothing than before (18 vs 8) — still not fully rigid
+        const smoothFactor = 1 - Math.exp(-18 * dt);
         GAME.camera.position.lerp(this._camTarget, smoothFactor);
 
         this._lookGoal.set(pos.x, pos.y + 1, pos.z);

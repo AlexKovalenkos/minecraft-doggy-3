@@ -232,6 +232,11 @@ const World = {
         this._createCatHouse();
         this._createHamsterHouse();
         this._createTerrainVariety();
+        // П4 — окружение
+        this._addSandAndReeds();
+        this._addSnowAndStone();
+        this._addWaterfall();
+        this._addGlowingMushrooms();
     },
 
     _createTrees() {
@@ -1119,389 +1124,342 @@ const World = {
 
     // === PHASE 3: Castle (Disney-style) ===
     _createCastle() {
+        // ── Disney-style MC castle on raised hill ──────────────────
         const cx = 85, cz = 80;
-        const g = new THREE.Group();
-        const W = 24, H = 12, D = 20;
-        const wallT = 0.6;
-        const doorW = 5, doorH = 8;
+        const HILL_H = 6; // castle sits on a 6-unit hill
 
-        // Multi-layer stone materials
-        const wallMatLow = new THREE.MeshStandardMaterial({ color: 0x7a7a8a });
-        const wallMatMid = new THREE.MeshStandardMaterial({ color: 0x8a8a9a });
-        const wallMatTop = new THREE.MeshStandardMaterial({ color: 0x9a9aa5 });
-        const floorMat = new THREE.MeshStandardMaterial({ color: 0x6b3a2a });
-        const roofMat = new THREE.MeshStandardMaterial({ color: 0x4a0082, side: THREE.DoubleSide });
-        const goldMat = new THREE.MeshStandardMaterial({ color: 0xffd700 });
-        const redMat = new THREE.MeshStandardMaterial({ color: 0xcc2222 });
-        const winMat = new THREE.MeshStandardMaterial({ color: 0x87ceeb, transparent: true, opacity: 0.7 });
-        const pinkMat = new THREE.MeshStandardMaterial({ color: 0xff69b4 });
-        const stoneGrey = new THREE.MeshStandardMaterial({ color: 0x8a8a9a });
+        // Build the hill
+        const hillMat = this._texGrassTop
+            ? new THREE.MeshStandardMaterial({ map: this._texGrassTop })
+            : new THREE.MeshStandardMaterial({ color: 0x5a9a40 });
+        const hillLayers = [
+            { w: 36, h: 2 }, { w: 28, h: 2 }, { w: 22, h: 2 }
+        ];
+        let yOff = 0;
+        hillLayers.forEach(l => {
+            const hm = new THREE.Mesh(new THREE.BoxGeometry(l.w, l.h, l.w), hillMat);
+            hm.position.set(cx, yOff + l.h/2, cz);
+            hm.receiveShadow = true; hm.castShadow = true;
+            GAME.scene.add(hm);
+            // Collidable for each layer so player can climb
+            this.collidables.push({ box: new THREE.Box3(
+                new THREE.Vector3(cx-l.w/2, yOff, cz-l.w/2),
+                new THREE.Vector3(cx+l.w/2, yOff+l.h, cz+l.w/2)
+            )});
+            yOff += l.h;
+        });
+        // yOff = 6 = HILL_H
+
+        // Stone cobble path up the hill (from south)
+        const pathMat = this._texStone
+            ? new THREE.MeshStandardMaterial({ map: this._texStone })
+            : new THREE.MeshStandardMaterial({ color: 0x888888 });
+        for (let i = 0; i < 10; i++) {
+            const seg = new THREE.Mesh(new THREE.BoxGeometry(3, 0.3, 3), pathMat);
+            seg.position.set(cx, i*0.6, cz + 18 - i*2.2);
+            seg.receiveShadow = true;
+            GAME.scene.add(seg);
+        }
+
+        // Moat (water ring around hill base)
+        const moatMat = new THREE.MeshStandardMaterial({
+            color: 0x4488cc, transparent: true, opacity: 0.75
+        });
+        [{ dx:0, dz:20, w:48, d:4 }, { dx:0, dz:-20, w:48, d:4 },
+         { dx:22, dz:0, w:4, d:36 }, { dx:-22, dz:0, w:4, d:36 }].forEach(m => {
+            const moat = new THREE.Mesh(new THREE.BoxGeometry(m.w, 0.5, m.d), moatMat);
+            moat.position.set(cx+m.dx, 0.25, cz+m.dz);
+            GAME.scene.add(moat);
+            this.waterZones.push({
+                cx: cx+m.dx, cz: cz+m.dz,
+                halfW: m.w/2, halfD: m.d/2
+            });
+        });
+
+        // Suspension bridge over south moat
+        const woodM = new THREE.MeshStandardMaterial({ color: 0xb08050 });
+        const chainM = new THREE.MeshStandardMaterial({ color: 0x888888 });
+        for (let i = 0; i < 8; i++) {
+            const plank = new THREE.Mesh(new THREE.BoxGeometry(3, 0.25, 1), woodM);
+            plank.position.set(cx, 0.5, cz + 18.5 - i * 1.1);
+            GAME.scene.add(plank);
+        }
+        // Bridge chains
+        [-1.3, 1.3].forEach(xo => {
+            const chain = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 10), chainM);
+            chain.position.set(cx+xo, 2.5, cz+13);
+            chain.rotation.x = 0.3;
+            GAME.scene.add(chain);
+        });
+        // Bridge collidable
+        this.collidables.push({ box: new THREE.Box3(
+            new THREE.Vector3(cx-1.8, 0, cz+10),
+            new THREE.Vector3(cx+1.8, 0.8, cz+19)
+        )});
+
+        // === CASTLE GROUP (positioned at hill top) ===
+        const g = new THREE.Group();
+        const W = 22, H = 10, D = 18;
+        const wallT = 0.6;
+        const doorW = 4.5, doorH = 7;
+
+        // Materials — Disney light cream + accents
+        const wallMat  = new THREE.MeshStandardMaterial({ color: 0xF5EED8 }); // cream
+        const goldMat   = new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0x443300, emissiveIntensity: 0.2 });
+        const pinkRoof  = new THREE.MeshStandardMaterial({ color: 0xff69b4 });
+        const blueRoof  = new THREE.MeshStandardMaterial({ color: 0x4488ff });
+        const purpRoof  = new THREE.MeshStandardMaterial({ color: 0x8844cc });
+        const redMat    = new THREE.MeshStandardMaterial({ color: 0xcc2222 });
+        const winMat    = new THREE.MeshStandardMaterial({ color: 0x88ccff, transparent: true, opacity: 0.6 });
+        const floorMat  = new THREE.MeshStandardMaterial({ color: 0xd4c8a0 });
+        const torchMat  = new THREE.MeshStandardMaterial({ color: 0xffcc44, emissive: 0xff8800, emissiveIntensity: 0.9 });
+
+        // Helper: add a torch with point light
+        const addTorch = (x, y, z) => {
+            const torch = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.5, 0.2),
+                new THREE.MeshStandardMaterial({ color: 0x8B6040 }));
+            torch.position.set(x, y, z);
+            g.add(torch);
+            const flame = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.18), torchMat);
+            flame.position.set(x, y + 0.35, z);
+            g.add(flame);
+            const light = new THREE.PointLight(0xff9940, 1.2, 6);
+            light.position.set(x, y + 0.5, z);
+            g.add(light);
+        };
 
         // Floor
-        const floor = new THREE.Mesh(new THREE.BoxGeometry(W, 0.15, D), floorMat);
-        floor.position.y = 0.075;
+        const floor = new THREE.Mesh(new THREE.BoxGeometry(W, 0.2, D), floorMat);
+        floor.position.y = 0.1;
         floor.receiveShadow = true;
         g.add(floor);
 
-        // Walls — 3 layers by height (low/mid/top)
-        const layerH = H / 3;
-        const wallLayers = [
-            { mat: wallMatLow, yBase: 0 },
-            { mat: wallMatMid, yBase: layerH },
-            { mat: wallMatTop, yBase: layerH * 2 }
-        ];
-        wallLayers.forEach(wl => {
-            // Back wall
-            const bw = new THREE.Mesh(new THREE.BoxGeometry(W, layerH, wallT), wl.mat);
-            bw.position.set(0, wl.yBase + layerH / 2, -D / 2 + wallT / 2);
-            bw.castShadow = true;
-            g.add(bw);
-            // Left wall
-            const lw = new THREE.Mesh(new THREE.BoxGeometry(wallT, layerH, D), wl.mat);
-            lw.position.set(-W / 2 + wallT / 2, wl.yBase + layerH / 2, 0);
-            lw.castShadow = true;
-            g.add(lw);
-            // Right wall
-            const rw = new THREE.Mesh(new THREE.BoxGeometry(wallT, layerH, D), wl.mat);
-            rw.position.set(W / 2 - wallT / 2, wl.yBase + layerH / 2, 0);
-            rw.castShadow = true;
-            g.add(rw);
+        // ── Walls (cream MC blocks, pixel-border effect) ────────────
+        // Back wall
+        const bw = new THREE.Mesh(new THREE.BoxGeometry(W, H, wallT), wallMat);
+        bw.position.set(0, H/2, -D/2+wallT/2); bw.castShadow=true; g.add(bw);
+        // Left & right walls
+        [[-W/2+wallT/2, 0], [W/2-wallT/2, 0]].forEach(([x]) => {
+            const w = new THREE.Mesh(new THREE.BoxGeometry(wallT, H, D), wallMat);
+            w.position.set(x, H/2, 0); w.castShadow=true; g.add(w);
         });
 
-        // Front wall with large door opening (use mid color)
+        // Front wall with door opening
         const frontSideW = (W - doorW) / 2;
-        const fL = new THREE.Mesh(new THREE.BoxGeometry(frontSideW, H, wallT), wallMatMid);
-        fL.position.set(-W / 2 + frontSideW / 2, H / 2, D / 2 - wallT / 2);
-        fL.castShadow = true;
-        g.add(fL);
-        const fR = new THREE.Mesh(new THREE.BoxGeometry(frontSideW, H, wallT), wallMatMid);
-        fR.position.set(W / 2 - frontSideW / 2, H / 2, D / 2 - wallT / 2);
-        fR.castShadow = true;
-        g.add(fR);
-        const fTop = new THREE.Mesh(new THREE.BoxGeometry(doorW, H - doorH, wallT), wallMatTop);
-        fTop.position.set(0, doorH + (H - doorH) / 2, D / 2 - wallT / 2);
-        fTop.castShadow = true;
-        g.add(fTop);
+        const fL = new THREE.Mesh(new THREE.BoxGeometry(frontSideW, H, wallT), wallMat);
+        fL.position.set(-W/2+frontSideW/2, H/2, D/2-wallT/2); fL.castShadow=true; g.add(fL);
+        const fR = new THREE.Mesh(new THREE.BoxGeometry(frontSideW, H, wallT), wallMat);
+        fR.position.set(W/2-frontSideW/2, H/2, D/2-wallT/2); fR.castShadow=true; g.add(fR);
+        const fTop = new THREE.Mesh(new THREE.BoxGeometry(doorW, H-doorH, wallT), wallMat);
+        fTop.position.set(0, doorH+(H-doorH)/2, D/2-wallT/2); fTop.castShadow=true; g.add(fTop);
 
-        // Crenellations along all walls
-        const crenMat = wallMatTop;
-        // Back wall crenellations
-        for (let i = 0; i < 12; i++) {
-            if (i % 2 === 0) continue;
-            const cren = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.2, 0.6), crenMat);
-            cren.position.set(-W / 2 + 1 + i * (W / 12), H + 0.6, -D / 2 + 0.3);
-            cren.castShadow = true;
-            g.add(cren);
-        }
-        // Left/right wall crenellations
-        for (let i = 0; i < 10; i++) {
-            if (i % 2 === 0) continue;
-            [-W / 2 + 0.3, W / 2 - 0.3].forEach(xOff => {
-                const cren = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.2, 0.8), crenMat);
-                cren.position.set(xOff, H + 0.6, -D / 2 + 1 + i * (D / 10));
-                cren.castShadow = true;
-                g.add(cren);
+        // Decorative stone arch around door (golden)
+        [-doorW/2-0.4, doorW/2+0.4].forEach(xo => {
+            const arc = new THREE.Mesh(new THREE.BoxGeometry(0.5, doorH+0.5, 0.5), goldMat);
+            arc.position.set(xo, (doorH+0.5)/2, D/2); arc.castShadow=true; g.add(arc);
+        });
+
+        // Stained glass windows (large, colorful)
+        const wColors = [0xff69b4, 0xffd700, 0x88ccff, 0xff69b4];
+        [-D/3, D/3].forEach(zo => {
+            wColors.forEach((c, i) => {
+                const pm = new THREE.MeshStandardMaterial({color:c, transparent:true, opacity:0.55, emissive:c, emissiveIntensity:0.15});
+                const wp = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.8, 0.45), pm);
+                wp.position.set(-W/2+wallT/2, H*0.55+i*0-0.6, zo + i*0.5-0.75); g.add(wp);
+                const wp2 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.8, 0.45), pm);
+                wp2.position.set(W/2-wallT/2, H*0.55-0.6, zo + i*0.5-0.75); g.add(wp2);
             });
-        }
+        });
 
-        // 4 corner towers — taller with spires
-        const towerPositions = [
-            [-W / 2, -D / 2], [W / 2, -D / 2],
-            [-W / 2, D / 2], [W / 2, D / 2]
+        // ── 4 corner towers (tall, thin, Disney) ────────────────────
+        const towerDefs = [
+            { x:-W/2, z:-D/2, roof: pinkRoof },
+            { x: W/2, z:-D/2, roof: blueRoof },
+            { x:-W/2, z: D/2, roof: purpRoof },
+            { x: W/2, z: D/2, roof: pinkRoof }
         ];
-        towerPositions.forEach(([tx, tz]) => {
-            const tower = new THREE.Mesh(new THREE.BoxGeometry(3, 16, 3), stoneGrey);
-            tower.position.set(tx, 8, tz);
-            tower.castShadow = true;
-            g.add(tower);
-
-            // Cone roof (5 diminishing layers)
-            for (let i = 0; i < 5; i++) {
-                const s = 3.5 - i * 0.55;
-                const rh = 1.0;
-                const roofLayer = new THREE.Mesh(new THREE.BoxGeometry(s, rh, s), roofMat);
-                roofLayer.position.set(tx, 16 + i * rh + rh / 2, tz);
-                roofLayer.castShadow = true;
-                g.add(roofLayer);
+        towerDefs.forEach(td => {
+            // Tall thin tower body
+            const tower = new THREE.Mesh(new THREE.BoxGeometry(3.5, 20, 3.5), wallMat);
+            tower.position.set(td.x, 10, td.z); tower.castShadow=true; g.add(tower);
+            // Crenellations at top
+            for (let ci = 0; ci < 4; ci++) {
+                const cr = new THREE.Mesh(new THREE.BoxGeometry(1, 1.5, 1), wallMat);
+                const a = ci * Math.PI/2;
+                cr.position.set(td.x + Math.cos(a)*1.2, 21, td.z + Math.sin(a)*1.2);
+                g.add(cr);
             }
-
-            // Spire: thin pillar + golden ball
-            const spire = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2, 0.15), stoneGrey);
-            spire.position.set(tx, 22, tz);
-            g.add(spire);
-            const ball = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), goldMat);
-            ball.position.set(tx, 23.15, tz);
-            g.add(ball);
-
-            // Flag on top
-            const pole = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.5, 0.1), stoneGrey);
-            pole.position.set(tx, 23.8, tz);
-            g.add(pole);
-            const flag = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.8, 1.2), pinkMat);
-            flag.position.set(tx, 24.2, tz + 0.6);
-            g.add(flag);
-        });
-
-        // Roof of main hall
-        const mainRoof = new THREE.Mesh(new THREE.BoxGeometry(W + 1, 0.6, D + 1), roofMat);
-        mainRoof.position.y = H + 0.3;
-        mainRoof.castShadow = true;
-        g.add(mainRoof);
-
-        // Entrance arch — 2 columns + 3 arch segments
-        [-doorW / 2 - 0.3, doorW / 2 + 0.3].forEach(xOff => {
-            const col = new THREE.Mesh(new THREE.BoxGeometry(0.6, doorH, 0.6), wallMatLow);
-            col.position.set(xOff, doorH / 2, D / 2 + 0.3);
-            col.castShadow = true;
-            g.add(col);
-        });
-        // Arch pieces (3 boxes forming arc above door)
-        [-1.2, 0, 1.2].forEach((xOff, i) => {
-            const archH = 0.6;
-            const archY = doorH + 0.3 + (i === 1 ? 0.4 : 0);
-            const archP = new THREE.Mesh(new THREE.BoxGeometry(1.8, archH, 0.6), wallMatMid);
-            archP.position.set(xOff, archY, D / 2 + 0.3);
-            archP.castShadow = true;
-            g.add(archP);
-        });
-
-        // Stained glass windows (colorful panes inside each window)
-        const stainedColors = [0xff69b4, 0xffd700, 0x87ceeb];
-        [-D / 4, D / 4].forEach(zOff => {
-            // Base window
-            const wL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.5, 1), winMat);
-            wL.position.set(-W / 2 + wallT / 2 - 0.05, H * 0.6, zOff);
-            g.add(wL);
-            const wR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.5, 1), winMat);
-            wR.position.set(W / 2 - wallT / 2 + 0.05, H * 0.6, zOff);
-            g.add(wR);
-            // Stained glass panes
-            stainedColors.forEach((sc, si) => {
-                const pMat = new THREE.MeshStandardMaterial({ color: sc, transparent: true, opacity: 0.5 });
-                const pL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.25), pMat);
-                pL.position.set(-W / 2 + wallT / 2 - 0.08, H * 0.6 - 0.4 + si * 0.4, zOff);
-                g.add(pL);
-                const pR = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.25), pMat);
-                pR.position.set(W / 2 - wallT / 2 + 0.08, H * 0.6 - 0.4 + si * 0.4, zOff);
-                g.add(pR);
+            // Conical roof (5 shrinking layers = MC pixel cone)
+            const roofColors = [td.roof, td.roof, td.roof, td.roof, td.roof];
+            [3.2, 2.5, 1.8, 1.2, 0.6].forEach((s, i) => {
+                const rl = new THREE.Mesh(new THREE.BoxGeometry(s, 1.2, s), roofColors[i]);
+                rl.position.set(td.x, 21.5 + i*1.2, td.z); rl.castShadow=true; g.add(rl);
             });
+            // Gold spire + flag
+            const spire = new THREE.Mesh(new THREE.BoxGeometry(0.2, 3, 0.2), goldMat);
+            spire.position.set(td.x, 28, td.z); g.add(spire);
+            const flag = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.2, 1.8), td.roof);
+            flag.position.set(td.x+0.9, 30, td.z); g.add(flag);
+            // Torch on tower
+            addTorch(td.x, 20.5, td.z);
         });
 
-        // Banners at entrance
-        [-3.5, 3.5].forEach(xOff => {
-            const banner = new THREE.Mesh(new THREE.BoxGeometry(0.05, 4, 1.5), pinkMat);
-            banner.position.set(xOff, 5, D / 2 + 0.5);
-            g.add(banner);
-            // Gold diamond on banner
-            const diamond = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.8, 0.8), goldMat);
-            diamond.position.set(xOff, 5, D / 2 + 0.55);
-            diamond.rotation.z = Math.PI / 4;
-            g.add(diamond);
+        // ── Central main roof (gentle pyramid) ──────────────────────
+        [W+1, W-2, W-5].forEach((s, i) => {
+            const rl = new THREE.Mesh(new THREE.BoxGeometry(s, 1.2, D+1-i*1.5), blueRoof);
+            rl.position.set(0, H+0.6+i*1.2, 0); rl.castShadow=true; g.add(rl);
         });
 
-        // Staircase to entrance (3 steps)
-        [
-            { w: 7, y: 0.15, z: D / 2 + 1.0 },
-            { w: 6, y: 0.45, z: D / 2 + 2.0 },
-            { w: 5, y: 0.75, z: D / 2 + 3.0 }
-        ].forEach(s => {
-            const step = new THREE.Mesh(new THREE.BoxGeometry(s.w, 0.3, 1.5), wallMatLow);
-            step.position.set(0, s.y, s.z);
-            step.receiveShadow = true;
-            g.add(step);
+        // ── Banners ─────────────────────────────────────────────────
+        [-W/2+2, W/2-2].forEach(xo => {
+            const ban = new THREE.Mesh(new THREE.BoxGeometry(0.1, 5, 2), pinkRoof);
+            ban.position.set(xo, H*0.6, D/2+0.5); g.add(ban);
         });
 
-        // Fountain in front of castle (local coords, placed at front)
-        const fntZ = D / 2 + 8;
-        // Basin
-        const basin = new THREE.Mesh(new THREE.BoxGeometry(4, 0.4, 4), wallMatLow);
-        basin.position.set(0, 0.2, fntZ);
-        g.add(basin);
-        // Water
-        const fntWater = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.15, 3.6),
-            new THREE.MeshStandardMaterial({ color: 0x87ceeb, transparent: true, opacity: 0.6 }));
-        fntWater.position.set(0, 0.38, fntZ);
-        g.add(fntWater);
-        // Central column
-        const fntCol = new THREE.Mesh(new THREE.BoxGeometry(0.4, 2, 0.4), wallMatMid);
-        fntCol.position.set(0, 1.4, fntZ);
-        g.add(fntCol);
-        // 4 water streams (small blue rods)
-        const streamMat = new THREE.MeshStandardMaterial({ color: 0x6ab4e8, transparent: true, opacity: 0.5 });
-        [[0.6, 0], [-0.6, 0], [0, 0.6], [0, -0.6]].forEach(([dx, dz]) => {
-            const stream = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.8, 0.1), streamMat);
-            stream.position.set(dx, 1.8, fntZ + dz);
-            stream.rotation.z = dx !== 0 ? Math.sign(dx) * 0.6 : 0;
-            stream.rotation.x = dz !== 0 ? -Math.sign(dz) * 0.6 : 0;
-            g.add(stream);
+        // ── Entry steps ─────────────────────────────────────────────
+        [[8, 0.2, D/2+1.2], [7, 0.5, D/2+2.4], [6, 0.8, D/2+3.6]].forEach(([w,y,z]) => {
+            const step = new THREE.Mesh(new THREE.BoxGeometry(w, 0.4, 1.5), wallMat);
+            step.position.set(0, y, z); step.receiveShadow=true; g.add(step);
         });
 
-        // === INTERIOR ===
+        // ── Torches on walls ────────────────────────────────────────
+        [-D/3, 0, D/3].forEach(zo => {
+            addTorch(-W/2+0.5, H*0.45, zo);
+            addTorch( W/2-0.5, H*0.45, zo);
+        });
+        addTorch(0, H*0.45, -D/2+0.5);
+
+        // ── INTERIOR ────────────────────────────────────────────────
         // Red carpet
-        const carpet = new THREE.Mesh(new THREE.BoxGeometry(3, 0.2, 18), redMat);
-        carpet.position.set(0, 0.1, -1);
-        g.add(carpet);
+        const carpet = new THREE.Mesh(new THREE.BoxGeometry(3, 0.15, D-2), redMat);
+        carpet.position.set(0, 0.15, 0); g.add(carpet);
 
-        // 4 paired columns along carpet
-        [-5, -1, 3, 7].forEach(zOff => {
-            [-4, 4].forEach(xOff => {
-                const col = new THREE.Mesh(new THREE.BoxGeometry(0.4, 10, 0.4), stoneGrey);
-                col.position.set(xOff, 5, zOff);
-                col.castShadow = true;
-                g.add(col);
-                // Gold capital
-                const cap = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.3, 0.6), goldMat);
-                cap.position.set(xOff, 10.15, zOff);
-                g.add(cap);
+        // Bookshelves along back wall
+        for (let i = -3; i <= 3; i++) {
+            const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.5, 0.6),
+                new THREE.MeshStandardMaterial({ color: 0x5a3a0a }));
+            shelf.position.set(i*2.2, 1.25, -D/2+0.5); g.add(shelf);
+            // Book spines (colorful)
+            [0xff69b4, 0x4488ff, 0xffdd00, 0x44cc44].forEach((bc, bi) => {
+                const book = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.8, 0.15),
+                    new THREE.MeshStandardMaterial({color:bc}));
+                book.position.set(i*2.2 - 0.45 + bi*0.3, 1.2, -D/2+0.55); g.add(book);
+            });
+        }
+
+        // Interior columns
+        [-D/4, D/4].forEach(zo => {
+            [-W/3, W/3].forEach(xo => {
+                const col = new THREE.Mesh(new THREE.BoxGeometry(0.6, H, 0.6), wallMat);
+                col.position.set(xo, H/2, zo); col.castShadow=true; g.add(col);
+                const cap = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.8), goldMat);
+                cap.position.set(xo, H+0.2, zo); g.add(cap);
             });
         });
 
-        // Chandelier (center of hall)
-        const chandelierY = 10;
-        // Chain to ceiling
-        const chain = new THREE.Mesh(new THREE.BoxGeometry(0.08, 2, 0.08),
-            new THREE.MeshStandardMaterial({ color: 0x444444 }));
-        chain.position.set(0, chandelierY + 1, 0);
-        g.add(chain);
-        // Horizontal bar
-        const bar = new THREE.Mesh(new THREE.BoxGeometry(3, 0.15, 0.15),
-            new THREE.MeshStandardMaterial({ color: 0x444444 }));
-        bar.position.set(0, chandelierY, 0);
-        g.add(bar);
-        // 3 candles on bar
-        const flameMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, emissive: 0xffaa00, emissiveIntensity: 0.5 });
-        [-1, 0, 1].forEach(xOff => {
-            const candle = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.4, 0.15),
-                new THREE.MeshStandardMaterial({ color: 0xfffff0 }));
-            candle.position.set(xOff, chandelierY - 0.2, 0);
-            g.add(candle);
-            const flame = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.2, 0.1), flameMat);
-            flame.position.set(xOff, chandelierY + 0.1, 0);
-            g.add(flame);
+        // Chandelier
+        const chanY = H-0.5;
+        const chanChain = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2, 0.1),
+            new THREE.MeshStandardMaterial({color:0x666666}));
+        chanChain.position.set(0, chanY+1, 0); g.add(chanChain);
+        const chanBar = new THREE.Mesh(new THREE.BoxGeometry(4, 0.2, 0.2),
+            new THREE.MeshStandardMaterial({color:0x666666}));
+        chanBar.position.set(0, chanY, 0); g.add(chanBar);
+        [-1.5, 0, 1.5].forEach(xo => {
+            const fl = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.3, 0.15), torchMat);
+            fl.position.set(xo, chanY-0.2, 0); g.add(fl);
+            const cl = new THREE.PointLight(0xffcc44, 0.8, 8);
+            cl.position.set(xo, chanY-0.1, 0); g.add(cl);
         });
 
-        // Throne step platform
-        const throneZ = -D / 2 + 2;
-        const throneStep = new THREE.Mesh(new THREE.BoxGeometry(6, 0.3, 4), wallMatLow);
-        throneStep.position.set(0, 0.15, throneZ);
-        throneStep.receiveShadow = true;
-        g.add(throneStep);
+        // ── DANCE FLOOR (coloured tiles) ────────────────────────────
+        const danceColors = [0xff69b4, 0xffd700, 0x4488ff, 0x44cc44, 0xff8800, 0xcc44ff];
+        this._danceTiles = [];
+        for (let di = -2; di <= 2; di++) for (let dj = -2; dj <= 2; dj++) {
+            const col = danceColors[((di+2)+(dj+2)*5) % danceColors.length];
+            const tileMat = new THREE.MeshStandardMaterial({color: col, emissive: col, emissiveIntensity: 0.05});
+            const tile = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.15, 1.8), tileMat);
+            tile.position.set(di*2, 0.15, D/4 + dj*2);
+            g.add(tile);
+            tile.userData.baseColor = col;
+            tile.userData.tileMat = tileMat;
+            this._danceTiles.push({ mesh: tile, mat: tileMat, bx: cx+di*2, bz: cz+HILL_H+D/4+dj*2 });
+        }
 
-        // Throne (on step)
-        const seat = new THREE.Mesh(new THREE.BoxGeometry(2, 0.4, 2), goldMat);
-        seat.position.set(0, 0.65, throneZ);
-        seat.castShadow = true;
-        g.add(seat);
-        const cushion = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.3, 1.8), redMat);
-        cushion.position.set(0, 1.0, throneZ);
-        g.add(cushion);
-        const throneBack = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 0.4), goldMat);
-        throneBack.position.set(0, 2.3, throneZ - 1);
-        throneBack.castShadow = true;
-        g.add(throneBack);
-        [-1.1, 1.1].forEach(xOff => {
-            const arm = new THREE.Mesh(new THREE.BoxGeometry(0.3, 1.5, 2), goldMat);
-            arm.position.set(xOff, 1.3, throneZ);
-            arm.castShadow = true;
-            g.add(arm);
+        // ── PORTAL ──────────────────────────────────────────────────
+        const portalMat = new THREE.MeshStandardMaterial({
+            color: 0x8844cc, emissive: 0x6622aa, emissiveIntensity: 0.8,
+            transparent: true, opacity: 0.85
         });
-
-        // Crown on throne back (3 gold prongs)
-        [-0.3, 0, 0.3].forEach(xOff => {
-            const prong = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.4, 0.15), goldMat);
-            prong.position.set(xOff, 4.0, throneZ - 1);
-            g.add(prong);
+        // Frame
+        [[0,3,0],[0,-3,0],[2.5,0,0],[-2.5,0,0]].forEach(([px,py,pz]) => {
+            const fr = new THREE.Mesh(new THREE.BoxGeometry(
+                Math.abs(px)>0 ? 0.4 : 5, Math.abs(py)>0 ? 0.4 : 6.2, 0.4
+            ), new THREE.MeshStandardMaterial({color:0x4a2080, emissive:0x220840, emissiveIntensity:0.5}));
+            fr.position.set(px, py+3, -D/2+3); g.add(fr);
         });
+        // Portal fill
+        const portalFill = new THREE.Mesh(new THREE.BoxGeometry(4.5, 5.5, 0.15), portalMat);
+        portalFill.position.set(0, 3, -D/2+3); g.add(portalFill);
+        const portalLight = new THREE.PointLight(0x8844cc, 1.5, 10);
+        portalLight.position.set(0, 3, -D/2+3); g.add(portalLight);
+        // Store portal world pos for controls.js teleport check
+        this.portalPos = { x: cx, y: 0, z: cz - D/2 + 3 + HILL_H };
 
-        // Wall tapestries with gold diamond ornament
-        [-D / 4, 0, D / 4].forEach(zOff => {
-            const tapL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 3, 1.5), pinkMat);
-            tapL.position.set(-W / 2 + wallT + 0.05, H * 0.45, zOff);
-            g.add(tapL);
-            // Gold diamond on tapestry
-            const dL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.6, 0.6), goldMat);
-            dL.position.set(-W / 2 + wallT + 0.1, H * 0.45, zOff);
-            dL.rotation.z = Math.PI / 4;
-            g.add(dL);
-
-            const tapR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 3, 1.5),
-                new THREE.MeshStandardMaterial({ color: 0xffd700 }));
-            tapR.position.set(W / 2 - wallT - 0.05, H * 0.45, zOff);
-            g.add(tapR);
-            const dR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.6, 0.6), pinkMat);
-            dR.position.set(W / 2 - wallT - 0.1, H * 0.45, zOff);
-            dR.rotation.z = Math.PI / 4;
-            g.add(dR);
+        // ── Throne ──────────────────────────────────────────────────
+        const throneZ = D/4;
+        const throneStep = new THREE.Mesh(new THREE.BoxGeometry(6, 0.4, 4), wallMat);
+        throneStep.position.set(0, 0.2, throneZ); g.add(throneStep);
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.5, 2.5), goldMat);
+        seat.position.set(0, 0.7, throneZ); g.add(seat);
+        const cushion = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.35, 2.2), redMat);
+        cushion.position.set(0, 1.1, throneZ); g.add(cushion);
+        const throneBack2 = new THREE.Mesh(new THREE.BoxGeometry(2.5, 4, 0.4), goldMat);
+        throneBack2.position.set(0, 3, throneZ-1.2); throneBack2.castShadow=true; g.add(throneBack2);
+        [-1.2, 0, 1.2].forEach(xo => {
+            const prong = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.6, 0.2), goldMat);
+            prong.position.set(xo, 5.3, throneZ-1.2); g.add(prong);
         });
-
-        // Candelabras along carpet
-        const candleMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
-        [-4, -1, 2, 5].forEach(zOff => {
-            [-2.5, 2.5].forEach(xOff => {
-                const pole = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.5, 0.15), candleMat);
-                pole.position.set(xOff, 1.25, zOff);
-                g.add(pole);
-                const flame2 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.3, 0.2), flameMat);
-                flame2.position.set(xOff, 2.65, zOff);
-                g.add(flame2);
-            });
-        });
-
-        g.position.set(cx, 0, cz);
+        // Crown on throne
+        const crownLight = new THREE.PointLight(0xffd700, 0.6, 5);
+        crownLight.position.set(0, 5, throneZ-1); g.add(crownLight);
+        // Place group at hill top
+        g.position.set(cx, HILL_H, cz);
         GAME.scene.add(g);
 
-        // Collisions — 4 walls
-        this.collidables.push({
-            box: new THREE.Box3(
-                new THREE.Vector3(cx - W / 2, 0, cz - D / 2),
-                new THREE.Vector3(cx + W / 2, H, cz - D / 2 + wallT)
-            )
-        });
-        this.collidables.push({
-            box: new THREE.Box3(
-                new THREE.Vector3(cx - W / 2, 0, cz - D / 2),
-                new THREE.Vector3(cx - W / 2 + wallT, H, cz + D / 2)
-            )
-        });
-        this.collidables.push({
-            box: new THREE.Box3(
-                new THREE.Vector3(cx + W / 2 - wallT, 0, cz - D / 2),
-                new THREE.Vector3(cx + W / 2, H, cz + D / 2)
-            )
-        });
-        // Front left
-        this.collidables.push({
-            box: new THREE.Box3(
-                new THREE.Vector3(cx - W / 2, 0, cz + D / 2 - wallT),
-                new THREE.Vector3(cx - W / 2 + frontSideW, H, cz + D / 2)
-            )
-        });
-        // Front right
-        this.collidables.push({
-            box: new THREE.Box3(
-                new THREE.Vector3(cx + W / 2 - frontSideW, 0, cz + D / 2 - wallT),
-                new THREE.Vector3(cx + W / 2, H, cz + D / 2)
-            )
-        });
+        // Collisions (castle on hill — offset by HILL_H)
+        const ch = HILL_H;
+        this.collidables.push({ box: new THREE.Box3(
+            new THREE.Vector3(cx-W/2, ch, cz-D/2), new THREE.Vector3(cx+W/2, ch+H, cz-D/2+wallT)
+        )});
+        this.collidables.push({ box: new THREE.Box3(
+            new THREE.Vector3(cx-W/2, ch, cz-D/2), new THREE.Vector3(cx-W/2+wallT, ch+H, cz+D/2)
+        )});
+        this.collidables.push({ box: new THREE.Box3(
+            new THREE.Vector3(cx+W/2-wallT, ch, cz-D/2), new THREE.Vector3(cx+W/2, ch+H, cz+D/2)
+        )});
+        this.collidables.push({ box: new THREE.Box3(
+            new THREE.Vector3(cx-W/2, ch, cz+D/2-wallT), new THREE.Vector3(cx-W/2+frontSideW, ch+H, cz+D/2)
+        )});
+        this.collidables.push({ box: new THREE.Box3(
+            new THREE.Vector3(cx+W/2-frontSideW, ch, cz+D/2-wallT), new THREE.Vector3(cx+W/2, ch+H, cz+D/2)
+        )});
+        // Throne collidable (on hill)
+        this.collidables.push({ box: new THREE.Box3(
+            new THREE.Vector3(cx-1.5, ch, cz+throneZ-2), new THREE.Vector3(cx+1.5, ch+1.5, cz+throneZ+2)
+        )});
+        // Roof collision (on hill)
+        this.collidables.push({ box: new THREE.Box3(
+            new THREE.Vector3(cx-(W+1)/2, ch+H, cz-(D+1)/2),
+            new THREE.Vector3(cx+(W+1)/2, ch+H+1.5, cz+(D+1)/2)
+        )});
 
-        // Throne step + throne collision (raised by step)
-        this.collidables.push({
-            box: new THREE.Box3(
-                new THREE.Vector3(cx - 1.2, 0, cz + throneZ - 1.5),
-                new THREE.Vector3(cx + 1.2, 1.15, cz + throneZ + 1)
-            )
-        });
+        // Dance floor tile update stored for world.update()
+        // Throne pos for game logic (on hill)
+        this.thronePos = { x: cx, y: ch + 1.1, z: cz + HILL_H + throneZ };
 
-        // Castle roof collision
-        this.collidables.push({
-            box: new THREE.Box3(
-                new THREE.Vector3(cx - (W + 1) / 2, H, cz - (D + 1) / 2),
-                new THREE.Vector3(cx + (W + 1) / 2, H + 0.6, cz + (D + 1) / 2)
-            )
-        });
-
-        // Store throne position for game logic (raised by step)
-        this.thronePos = { x: cx, y: 1.15, z: cz + throneZ };
+        // Dance floor update via world.update — store reference
+        this._castleGroup = g;
     },
 
     // === PHASE 3: Stable ===
@@ -2022,11 +1980,179 @@ const World = {
         }
     },
 
+    // ── New environment features ────────────────────────────────
+    _addSandAndReeds() {
+        const sandTex = this._pixTex(16, (x, y) => {
+            const v = Math.sin(x*4.1+y*3.3)*0.08 + Math.cos(x*2.3-y*4.7)*0.06 + 0.88;
+            return `rgb(${Math.round(215*v)},${Math.round(195*v)},${Math.round(140*v)})`;
+        });
+        sandTex.wrapS = sandTex.wrapT = THREE.RepeatWrapping;
+        const sandMat = new THREE.MeshStandardMaterial({ map: sandTex });
+        const reedMat = new THREE.MeshStandardMaterial({ color: 0x5a8a30 });
+
+        // Sand strip around main lake (10,10) and second pond (-60,-50)
+        [{ cx:10, cz:10, r:9 }, { cx:-60, cz:-50, r:6 }].forEach(lake => {
+            for (let a = 0; a < Math.PI*2; a += 0.3) {
+                const r = lake.r + 0.5 + Math.random()*1.5;
+                const sx = lake.cx + Math.cos(a)*r;
+                const sz = lake.cz + Math.sin(a)*r;
+                const sand = new THREE.Mesh(new THREE.BoxGeometry(2, 0.18, 2), sandMat);
+                sand.position.set(sx, this.getTerrainY(sx,sz)-0.05, sz);
+                sand.receiveShadow = true;
+                GAME.scene.add(sand);
+            }
+            // Reeds (тростник)
+            for (let i = 0; i < 8; i++) {
+                const a = Math.random()*Math.PI*2;
+                const r2 = lake.r - 0.5 + Math.random()*1.5;
+                const rx = lake.cx + Math.cos(a)*r2;
+                const rz = lake.cz + Math.sin(a)*r2;
+                const h = 1.2 + Math.random()*0.8;
+                const reed = new THREE.Mesh(new THREE.BoxGeometry(0.2, h, 0.2), reedMat);
+                reed.position.set(rx, h/2+0.1, rz);
+                GAME.scene.add(reed);
+                // Reed top (cattail knob)
+                const knob = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.5, 0.25),
+                    new THREE.MeshStandardMaterial({ color: 0x4a2800 }));
+                knob.position.set(rx, h+0.35, rz);
+                GAME.scene.add(knob);
+            }
+        });
+    },
+
+    _addSnowAndStone() {
+        const snowMat = new THREE.MeshStandardMaterial({ color: 0xf0f5ff });
+        const stoneTex = this._texStone || null;
+        const stoneMat = stoneTex
+            ? new THREE.MeshStandardMaterial({ map: stoneTex })
+            : new THREE.MeshStandardMaterial({ color: 0x888899 });
+
+        if (!this._hmap) return;
+        const GRID = this._tGRID, CELL = this._tCELL, HALF = this._tHALF;
+        const dummy = new THREE.Object3D();
+
+        // Snow caps on cells with height >= 6
+        const snowCnt = [];
+        for (let gx=0;gx<GRID;gx++) for (let gz=0;gz<GRID;gz++) {
+            if (this._hmap[gx][gz] >= 6) snowCnt.push({gx,gz});
+        }
+        if (snowCnt.length > 0) {
+            const snowGeo = new THREE.BoxGeometry(CELL, 0.4, CELL);
+            const snowIM = new THREE.InstancedMesh(snowGeo, snowMat, snowCnt.length);
+            snowCnt.forEach(({gx,gz}, i) => {
+                const wx = -HALF+gx*CELL+CELL/2;
+                const wz = -HALF+gz*CELL+CELL/2;
+                const hW = this._hmap[gx][gz]*this._tBSIZE;
+                dummy.position.set(wx, hW+0.2, wz); dummy.updateMatrix();
+                snowIM.setMatrixAt(i, dummy.matrix);
+            });
+            snowIM.instanceMatrix.needsUpdate = true;
+            GAME.scene.add(snowIM);
+        }
+
+        // Stone exposed on steep slopes (cells where neighbour height differs >= 3)
+        const stoneCells = [];
+        for (let gx=1;gx<GRID-1;gx++) for (let gz=1;gz<GRID-1;gz++) {
+            const h = this._hmap[gx][gz];
+            if (h < 3) continue;
+            const maxNeighbour = Math.max(
+                this._hmap[gx-1][gz], this._hmap[gx+1][gz],
+                this._hmap[gx][gz-1], this._hmap[gx][gz+1]
+            );
+            if (h - maxNeighbour >= 2) stoneCells.push({gx,gz,h});
+        }
+        if (stoneCells.length > 0) {
+            const stGeo = new THREE.BoxGeometry(CELL*0.9, CELL*0.9, CELL*0.9);
+            const stIM = new THREE.InstancedMesh(stGeo, stoneMat, stoneCells.length);
+            stoneCells.forEach(({gx,gz,h}, i) => {
+                const wx = -HALF+gx*CELL+CELL/2;
+                const wz = -HALF+gz*CELL+CELL/2;
+                dummy.position.set(wx, h*this._tBSIZE-CELL*0.45, wz); dummy.updateMatrix();
+                stIM.setMatrixAt(i, dummy.matrix);
+            });
+            stIM.instanceMatrix.needsUpdate = true;
+            GAME.scene.add(stIM);
+        }
+    },
+
+    _addWaterfall() {
+        // Waterfall from mountain peak at (-45, -40) down to pond
+        const wfMat = new THREE.MeshStandardMaterial({
+            color: 0x88bbff, transparent: true, opacity: 0.7
+        });
+        const x = -45, z = -40;
+        for (let i = 0; i < 5; i++) {
+            const seg = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.5, 1.2), wfMat);
+            seg.position.set(x + i*0.15, 8 - i*1.5, z + i*0.5);
+            GAME.scene.add(seg);
+            seg.userData.wfIdx = i;
+            if (!this._waterfallSegs) this._waterfallSegs = [];
+            this._waterfallSegs.push(seg);
+        }
+        // Splash at bottom
+        const splashMat = new THREE.MeshStandardMaterial({ color: 0xaaddff, transparent:true, opacity:0.5 });
+        const splash = new THREE.Mesh(new THREE.BoxGeometry(3, 0.3, 3), splashMat);
+        splash.position.set(x + 0.75, 0.2, z + 2.5);
+        GAME.scene.add(splash);
+        this.waterZones.push({ cx: x+0.75, cz: z+2.5, halfW: 1.5, halfD: 1.5 });
+    },
+
+    _addGlowingMushrooms() {
+        const mushroomPositions = [
+            [-22, -18], [-35, -22], [-18, -30], [-40, 15],
+            [-45, -10], [-30, -35], [-50, -20], [-15, -40]
+        ];
+        mushroomPositions.forEach(([x, z]) => {
+            const groundY = this.getTerrainY(x, z);
+            const col = Math.random() > 0.5 ? 0xff44cc : 0xcc44ff;
+            const emMat = new THREE.MeshStandardMaterial({
+                color: col, emissive: col, emissiveIntensity: 0.7
+            });
+            const stemMat = new THREE.MeshStandardMaterial({ color: 0xf5e8d0 });
+            // Stem
+            const stem = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.8, 0.25), stemMat);
+            stem.position.set(x, groundY + 0.4, z);
+            GAME.scene.add(stem);
+            // Cap
+            const cap = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.4, 0.8), emMat);
+            cap.position.set(x, groundY + 0.95, z);
+            GAME.scene.add(cap);
+            // Glow light
+            const glow = new THREE.PointLight(col, 0.8, 4);
+            glow.position.set(x, groundY + 1.2, z);
+            GAME.scene.add(glow);
+        });
+    },
+
     update(dt) {
         this.clouds.forEach(c => {
             c.position.x += c.userData.speed * dt;
-            if (c.position.x > 130) c.position.x = -130;
+            if (c.position.x > 150) c.position.x = -150;
         });
+
+        // Dance floor — tiles light up near player
+        if (this._danceTiles) {
+            const px = Dog.group.position.x;
+            const pz = Dog.group.position.z;
+            const t = GAME.animTime;
+            this._danceTiles.forEach(tile => {
+                const d = Math.sqrt((px-tile.bx)**2 + (pz-tile.bz)**2);
+                if (d < 2.5) {
+                    tile.mat.emissiveIntensity = 0.6 + Math.sin(t*8 + tile.bx)*0.4;
+                } else {
+                    tile.mat.emissiveIntensity *= 0.92;
+                }
+            });
+        }
+
+        // Waterfall UV animation (position jitter)
+        if (this._waterfallSegs) {
+            const t = GAME.animTime;
+            this._waterfallSegs.forEach((seg, i) => {
+                seg.position.x += Math.sin(t*3 + i) * 0.002;
+                seg.material.opacity = 0.5 + Math.sin(t*4 + i*0.7) * 0.2;
+            });
+        }
     }
 };
 

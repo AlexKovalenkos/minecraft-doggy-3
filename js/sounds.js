@@ -100,10 +100,53 @@ const Sounds = {
         setTimeout(() => this._tone(1200, 0.12, 'sine', 0.1), 80);
     },
 
-    step() { this._tone(100 + Math.random() * 50, 0.05, 'triangle', 0.05); },
+    // Surface-based footsteps (MC style)
+    step(surface) {
+        const ctx = this._getCtx();
+        surface = surface || 'grass';
+        if (surface === 'grass') {
+            // Soft thud + rustle
+            const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * 0.06), ctx.sampleRate);
+            const d = buf.getChannelData(0);
+            for (let i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * (1 - i/d.length);
+            const src = ctx.createBufferSource(); src.buffer = buf;
+            const f = ctx.createBiquadFilter(); f.type='bandpass'; f.frequency.value=300; f.Q.value=2;
+            const g = ctx.createGain(); g.gain.setValueAtTime(0.07, ctx.currentTime);
+            src.connect(f); f.connect(g); g.connect(ctx.destination); src.start(); src.stop(ctx.currentTime+0.07);
+        } else if (surface === 'stone') {
+            this._tone(180 + Math.random()*30, 0.04, 'triangle', 0.09);
+        } else if (surface === 'water') {
+            this._tone(400 + Math.random()*100, 0.05, 'sine', 0.04);
+        } else {
+            this._tone(100 + Math.random()*50, 0.05, 'triangle', 0.05);
+        }
+    },
     wing() { this._tone(200 + Math.random() * 100, 0.08, 'sine', 0.04); },
-    place() { this._tone(300, 0.06, 'square', 0.08); },
-    break() { this._tone(150, 0.1, 'sawtooth', 0.08); },
+
+    // MC-style block place (deep clunk)
+    place() {
+        const ctx = this._getCtx();
+        const now = ctx.currentTime;
+        const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate*0.1), ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length)*0.7;
+        const src = ctx.createBufferSource(); src.buffer=buf;
+        const f = ctx.createBiquadFilter(); f.type='lowpass'; f.frequency.value=500;
+        const g = ctx.createGain(); g.gain.setValueAtTime(0.15, now); g.gain.exponentialRampToValueAtTime(0.001, now+0.1);
+        src.connect(f); f.connect(g); g.connect(ctx.destination); src.start(); src.stop(now+0.1);
+    },
+    // MC-style block break (crack)
+    break() {
+        const ctx = this._getCtx();
+        const now = ctx.currentTime;
+        const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate*0.12), ctx.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
+        const src = ctx.createBufferSource(); src.buffer=buf;
+        const f = ctx.createBiquadFilter(); f.type='bandpass'; f.frequency.value=800; f.Q.value=1.5;
+        const g = ctx.createGain(); g.gain.setValueAtTime(0.12, now); g.gain.exponentialRampToValueAtTime(0.001, now+0.12);
+        src.connect(f); f.connect(g); g.connect(ctx.destination); src.start(); src.stop(now+0.12);
+    },
 
     tame() {
         [600, 800, 1000, 1200].forEach((f, i) =>
@@ -176,8 +219,67 @@ const Sounds = {
     },
 
     squeak() {
-        // Hamster squeak — very high
         this._tone(1500, 0.06, 'sine', 0.08);
         setTimeout(() => this._tone(1800, 0.08, 'sine', 0.06), 70);
+    },
+
+    // Pig oink
+    oink() {
+        const ctx = this._getCtx();
+        const now = ctx.currentTime;
+        const o = ctx.createOscillator(); o.type='triangle';
+        o.frequency.setValueAtTime(320, now); o.frequency.exponentialRampToValueAtTime(180, now+0.18);
+        const g = ctx.createGain(); g.gain.setValueAtTime(0.09, now); g.gain.exponentialRampToValueAtTime(0.001, now+0.22);
+        o.connect(g); g.connect(ctx.destination); o.start(now); o.stop(now+0.22);
+    },
+
+    // Portal whoosh
+    portal() {
+        const ctx = this._getCtx();
+        const now = ctx.currentTime;
+        [0, 0.08, 0.16].forEach((delay, i) => {
+            const o = ctx.createOscillator(); o.type='sine';
+            o.frequency.setValueAtTime(300 + i*200, now+delay);
+            o.frequency.exponentialRampToValueAtTime(1200 + i*300, now+delay+0.4);
+            const g = ctx.createGain(); g.gain.setValueAtTime(0.08, now+delay); g.gain.exponentialRampToValueAtTime(0.001, now+delay+0.5);
+            o.connect(g); g.connect(ctx.destination); o.start(now+delay); o.stop(now+delay+0.5);
+        });
+    },
+
+    // Ambient bird chirp (called randomly)
+    bird() {
+        const ctx = this._getCtx();
+        const now = ctx.currentTime;
+        const freqs = [1800, 2200, 1600, 2000, 2400];
+        let t = now;
+        for (let i = 0; i < 3 + Math.floor(Math.random()*3); i++) {
+            const f = freqs[Math.floor(Math.random()*freqs.length)];
+            const o = ctx.createOscillator(); o.type='sine';
+            o.frequency.setValueAtTime(f, t); o.frequency.linearRampToValueAtTime(f*1.2, t+0.06);
+            const g = ctx.createGain(); g.gain.setValueAtTime(0.04, t); g.gain.exponentialRampToValueAtTime(0.001, t+0.08);
+            o.connect(g); g.connect(ctx.destination); o.start(t); o.stop(t+0.09);
+            t += 0.08 + Math.random()*0.06;
+        }
+    },
+
+    // Ambient wind (low noise)
+    startWind() {
+        if (this._windNode) return;
+        try {
+            const ctx = this._getCtx();
+            const bufSize = ctx.sampleRate * 3;
+            const buf = ctx.createBuffer(1, bufSize, ctx.sampleRate);
+            const d = buf.getChannelData(0);
+            for (let i=0;i<bufSize;i++) d[i]=Math.random()*2-1;
+            const src = ctx.createBufferSource(); src.buffer=buf; src.loop=true;
+            const f = ctx.createBiquadFilter(); f.type='bandpass'; f.frequency.value=200; f.Q.value=0.5;
+            const g = ctx.createGain(); g.gain.value=0.018;
+            src.connect(f); f.connect(g); g.connect(ctx.destination); src.start();
+            this._windNode = src; this._windGain = g;
+        } catch(e) {}
+    },
+
+    stopWind() {
+        if (this._windNode) { try { this._windNode.stop(); } catch(e) {} this._windNode=null; }
     }
 };
