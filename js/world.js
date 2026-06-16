@@ -258,6 +258,67 @@ const World = {
     // ============================================================
     // MC-STYLE TREE TEXTURES
     // ============================================================
+    _mkBarkTex(base = [140, 96, 48], dark = [70, 42, 24]) {
+        return this._pixTex(32, (x, y) => {
+            const stripe = (x % 7 === 0 || x % 11 === 0) ? 0.55 : 1.0;
+            const groove = Math.sin(y * 0.9 + x * 0.35) * 0.10 + Math.cos(y * 0.23) * 0.06;
+            const knot = ((x-21)**2 + ((y%18)-8)**2 < 7) ? 0.58 : 1.0;
+            const f = Math.max(0.42, Math.min(1.18, (0.92 + groove) * stripe * knot));
+            const mix = stripe < 1 || knot < 1 ? 0.35 : 0;
+            const r = base[0] * (1-mix) + dark[0] * mix;
+            const g = base[1] * (1-mix) + dark[1] * mix;
+            const b = base[2] * (1-mix) + dark[2] * mix;
+            return `rgb(${Math.round(r*f)},${Math.round(g*f)},${Math.round(b*f)})`;
+        });
+    },
+
+    _mkLeafTex(base = [76, 158, 42], hi = [136, 220, 72], dark = [24, 78, 28], holes = 4) {
+        return this._pixTex(32, (x, y) => {
+            const cut = (x*13 + y*17 + Math.floor(Math.sin(x*1.3+y*2.1)*19)) % 37;
+            if (cut < holes) return 'rgba(0,0,0,0)';
+            const vein = (Math.abs((x-y) % 9) < 1 || Math.abs((x+y) % 13) < 1) ? 0.22 : 0;
+            const n = Math.sin(x*2.7+y*1.9)*0.16 + Math.cos(x*0.8-y*3.4)*0.10;
+            const light = Math.max(0, Math.min(1, 0.45 + n + vein));
+            const shadow = cut > 30 ? 0.35 : 0;
+            const r = base[0]*(1-light-shadow) + hi[0]*light + dark[0]*shadow;
+            const g = base[1]*(1-light-shadow) + hi[1]*light + dark[1]*shadow;
+            const b = base[2]*(1-light-shadow) + hi[2]*light + dark[2]*shadow;
+            return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
+        });
+    },
+
+    _mkStoneTex(base = [130, 130, 136], dark = [70, 72, 78], hi = [190, 190, 198]) {
+        return this._pixTex(32, (x, y) => {
+            const crack = (x === y || Math.abs((x*3 + y*5) % 29) < 1) ? 0.28 : 0;
+            const fleck = ((x*11 + y*7) % 23 === 0) ? 0.26 : 0;
+            const n = Math.sin(x*1.7+y*2.3)*0.13 + Math.cos(x*3.1-y*1.1)*0.08;
+            const l = Math.max(0, Math.min(1, 0.42 + n + fleck));
+            const s = Math.max(0, Math.min(1, crack + (n < -0.12 ? 0.16 : 0)));
+            const r = base[0]*(1-l-s) + hi[0]*l + dark[0]*s;
+            const g = base[1]*(1-l-s) + hi[1]*l + dark[1]*s;
+            const b = base[2]*(1-l-s) + hi[2]*l + dark[2]*s;
+            return `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`;
+        });
+    },
+
+    _mkSnowTex() {
+        return this._pixTex(32, (x, y) => {
+            const ice = ((x*5 + y*7) % 19 === 0) ? 0.18 : 0;
+            const n = Math.sin(x*1.2+y*0.9)*0.06 + Math.cos(x*2.4-y*1.7)*0.05;
+            const v = Math.max(0.82, Math.min(1.05, 0.94 + n));
+            return `rgb(${Math.round((236+ice*60)*v)},${Math.round((240+ice*55)*v)},${Math.round(255*v)})`;
+        });
+    },
+
+    _texMat(tex, opts = {}) {
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        return new THREE.MeshStandardMaterial({
+            map: tex,
+            roughness: 0.88,
+            ...opts
+        });
+    },
+
     _mkOakLog() {
         return this._pixTex(16, (x, y) => {
             const edge = (x === 0 || x === 15) ? 0.72 : 1.0;
@@ -312,38 +373,33 @@ const World = {
 
         const B = 1.0; // 1 block
 
-        // Shared textures
-        const oakLogTex   = this._mkOakLog();
-        const oakLeafTex  = this._mkOakLeaves();
-        oakLogTex.wrapS   = oakLogTex.wrapT = THREE.RepeatWrapping;
-        oakLeafTex.wrapS  = oakLeafTex.wrapT = THREE.RepeatWrapping;
-
-        const mOakLog   = new THREE.MeshStandardMaterial({ map: oakLogTex });
-        const mOakLeaf  = new THREE.MeshStandardMaterial({
-            map: oakLeafTex,
+        const leafOpts = {
             transparent: true,
-            alphaTest: 0.35,
+            alphaTest: 0.30,
             side: THREE.DoubleSide,
-            roughness: 0.85
-        });
+            roughness: 0.86
+        };
+
+        const mOakLog   = this._texMat(this._mkBarkTex([150,103,55], [72,43,25]));
+        const mOakLeaf  = this._texMat(this._mkLeafTex([62,150,44], [128,216,70], [18,72,28], 5), leafOpts);
 
         // Birch trunk — white/light grey bark
-        const mBirchLog = new THREE.MeshStandardMaterial({ color: 0xD8D0B8 });
+        const mBirchLog = this._texMat(this._mkBarkTex([214,205,176], [42,35,28]));
         // Birch leaves — lighter yellow-green
-        const mBirchLeaf = new THREE.MeshStandardMaterial({ color: 0x7DB84A });
+        const mBirchLeaf = this._texMat(this._mkLeafTex([120,174,76], [190,230,96], [52,104,36], 5), leafOpts);
 
         // Spruce — dark trunk, very dark needle-green
-        const mSpruceLog  = new THREE.MeshStandardMaterial({ color: 0x5a3a1a });
-        const mSpruceLeaf = new THREE.MeshStandardMaterial({ color: 0x2B5A1A });
+        const mSpruceLog  = this._texMat(this._mkBarkTex([92,58,30], [45,28,18]));
+        const mSpruceLeaf = this._texMat(this._mkLeafTex([32,82,36], [70,132,54], [8,44,24], 3), leafOpts);
 
         // Jungle — thick trunk, bright tropical green
-        const mJungleLog  = new THREE.MeshStandardMaterial({ color: 0x6B4A20 });
-        const mJungleLeaf = new THREE.MeshStandardMaterial({ color: 0x2E8B2E });
+        const mJungleLog  = this._texMat(this._mkBarkTex([112,78,38], [55,38,22]));
+        const mJungleLeaf = this._texMat(this._mkLeafTex([42,132,50], [110,212,76], [16,76,28], 6), leafOpts);
 
         // Cherry blossom — MC 1.20 style pink
-        const mCherryLog  = new THREE.MeshStandardMaterial({ color: 0x8B4565 });
-        const mCherryLeaf = new THREE.MeshStandardMaterial({
-            color: 0xF4A8C8, emissive: 0x3A0A18, emissiveIntensity: 0.08
+        const mCherryLog  = this._texMat(this._mkBarkTex([126,64,86], [66,34,48]));
+        const mCherryLeaf = this._texMat(this._mkLeafTex([218,128,168], [255,188,216], [126,54,92], 6), {
+            ...leafOpts, emissive: 0x3A0A18, emissiveIntensity: 0.06
         });
 
         // Tree position list: [x, z, type, trunkH]
@@ -366,58 +422,98 @@ const World = {
             [-38,-26, 4,4], [-26,-22, 4,5]
         ];
 
+        const addLeafBlock = (g, w, h, d, x, y, z, mat) => {
+            const l = new THREE.Mesh(new THREE.BoxGeometry(w*B, h*B, d*B), mat);
+            l.position.set(x*B, y*B, z*B);
+            l.castShadow = true; l.receiveShadow = true;
+            g.add(l);
+            return l;
+        };
+
+        const addBranch = (g, x, y, z, w, h, d, mat) => {
+            const b = new THREE.Mesh(new THREE.BoxGeometry(w*B, h*B, d*B), mat);
+            b.position.set(x*B, y*B, z*B);
+            b.castShadow = true;
+            g.add(b);
+        };
+
         const makeOak = (g, trunkH, logM, leafM) => {
             const trunk = new THREE.Mesh(new THREE.BoxGeometry(B, trunkH, B), logM);
             trunk.position.y = trunkH/2; trunk.castShadow = true; g.add(trunk);
-            // 2 wide layers (5×5) + 1 narrow top (3×3)
-            [0, B].forEach(ly => {
-                const l = new THREE.Mesh(new THREE.BoxGeometry(5*B, B, 5*B), leafM);
-                l.position.y = trunkH + ly + B/2; l.castShadow = true; g.add(l);
-            });
-            const top = new THREE.Mesh(new THREE.BoxGeometry(3*B, 1.5*B, 3*B), leafM);
-            top.position.y = trunkH + 2*B + 0.75*B; top.castShadow = true; g.add(top);
-            return 5*B;
+            addBranch(g, 1.1, trunkH-1.2, 0, 2.3, 0.45, 0.45, logM);
+            addBranch(g, -0.9, trunkH-0.5, -0.8, 0.45, 0.45, 1.8, logM);
+            [
+                [5.4, 1.1, 4.6, 0, trunkH+0.3, 0],
+                [4.4, 1.2, 5.2, 1.0, trunkH+1.0, -0.6],
+                [4.8, 1.1, 3.6, -1.1, trunkH+1.2, 0.8],
+                [3.5, 1.2, 4.2, 0.2, trunkH+2.0, 0.3],
+                [2.4, 1.0, 2.6, -0.3, trunkH+2.9, -0.1],
+            ].forEach(v => addLeafBlock(g, ...v, leafM));
+            return 5.6*B;
         };
 
         const makeBirch = (g, trunkH, logM, leafM) => {
             const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.6*B, trunkH, 0.6*B), logM);
             trunk.position.y = trunkH/2; trunk.castShadow = true; g.add(trunk);
-            // Small crown: 3×3 bottom, 3×3 mid, 1×1.5 top
-            const l1 = new THREE.Mesh(new THREE.BoxGeometry(3*B, B, 3*B), leafM);
-            l1.position.y = trunkH + B/2; l1.castShadow = true; g.add(l1);
-            const l2 = new THREE.Mesh(new THREE.BoxGeometry(2*B, B, 2*B), leafM);
-            l2.position.y = trunkH + 1.5*B; l2.castShadow = true; g.add(l2);
-            const top = new THREE.Mesh(new THREE.BoxGeometry(B, B, B), leafM);
-            top.position.y = trunkH + 2.5*B; top.castShadow = true; g.add(top);
-            return 3*B;
+            [
+                [3.6, 0.9, 3.2, 0, trunkH+0.2, 0],
+                [2.8, 1.0, 3.7, -0.5, trunkH+1.0, 0.4],
+                [2.6, 0.9, 2.4, 0.6, trunkH+1.8, -0.2],
+                [1.5, 0.9, 1.6, 0.1, trunkH+2.6, 0.2],
+            ].forEach(v => addLeafBlock(g, ...v, leafM));
+            return 3.8*B;
         };
 
         const makeSpruce = (g, trunkH, logM, leafM) => {
             const trunk = new THREE.Mesh(new THREE.BoxGeometry(B, trunkH, B), logM);
             trunk.position.y = trunkH/2; trunk.castShadow = true; g.add(trunk);
-            // Conical layers: wide at bottom, narrow at top (MC spruce)
-            const layers = [5, 5, 4, 3, 3, 2, 2, 1];
-            layers.forEach((w, i) => {
-                if (i * B >= trunkH - B) return; // only above trunk
-                const ly = i > 0 ? i : 0;
-                const l = new THREE.Mesh(new THREE.BoxGeometry(w*B, B, w*B), leafM);
-                l.position.y = trunkH - 1 + ly*B + B/2;
-                l.castShadow = true; g.add(l);
+            const layers = [
+                [6.5, 0.9, trunkH-1.3, 0.0],
+                [5.6, 0.9, trunkH-0.3, 0.25],
+                [4.7, 0.9, trunkH+0.8, -0.2],
+                [3.8, 0.9, trunkH+1.8, 0.15],
+                [2.8, 0.9, trunkH+2.7, 0.0],
+                [1.4, 1.2, trunkH+3.6, 0.0],
+            ];
+            layers.forEach(([w,h,y,off], i) => {
+                const l = addLeafBlock(g, w, h, Math.max(1.2, w-0.6), off, y, i%2 ? -0.25 : 0.25, leafM);
+                l.rotation.y = (i % 2) * Math.PI/2;
             });
-            return 5*B;
+            return 6.5*B;
         };
 
         const makeJungle = (g, trunkH, logM, leafM) => {
             // Thick trunk (2×2 blocks)
             const trunk = new THREE.Mesh(new THREE.BoxGeometry(2*B, trunkH, 2*B), logM);
             trunk.position.y = trunkH/2; trunk.castShadow = true; g.add(trunk);
-            // Large dense crown
-            const l1 = new THREE.Mesh(new THREE.BoxGeometry(6*B, 1.5*B, 6*B), leafM);
-            l1.position.y = trunkH + 0.75*B; l1.castShadow = true; g.add(l1);
-            const l2 = new THREE.Mesh(new THREE.BoxGeometry(5*B, B, 5*B), leafM);
-            l2.position.y = trunkH + 2*B; l2.castShadow = true; g.add(l2);
-            const top = new THREE.Mesh(new THREE.BoxGeometry(3*B, 1.5*B, 3*B), leafM);
-            top.position.y = trunkH + 3.5*B; top.castShadow = true; g.add(top);
+            addBranch(g, 1.8, trunkH-1.8, 0, 2.5, 0.5, 0.5, logM);
+            addBranch(g, -1.6, trunkH-1.0, 1.0, 0.5, 0.5, 2.2, logM);
+            [
+                [7.0, 1.5, 6.2, 0, trunkH+0.5, 0],
+                [5.8, 1.2, 6.8, 1.0, trunkH+1.9, -0.8],
+                [5.2, 1.2, 4.8, -1.2, trunkH+2.7, 0.7],
+                [3.6, 1.4, 3.5, 0.2, trunkH+4.0, 0],
+            ].forEach(v => addLeafBlock(g, ...v, leafM));
+            [[-2.8, trunkH-0.4, 2.4], [2.7, trunkH, -2.2], [0.5, trunkH-1.0, -3.0]].forEach(([x,y,z]) => {
+                addLeafBlock(g, 0.45, 3.2, 0.45, x, y, z, leafM);
+            });
+            return 6*B;
+        };
+
+        const makeCherry = (g, trunkH, logM, leafM) => {
+            const trunk = new THREE.Mesh(new THREE.BoxGeometry(0.9*B, trunkH, 0.9*B), logM);
+            trunk.position.y = trunkH/2; trunk.castShadow = true; g.add(trunk);
+            addBranch(g, 1.0, trunkH-0.8, 0.4, 2.0, 0.45, 0.45, logM);
+            addBranch(g, -1.0, trunkH-0.1, -0.5, 0.45, 0.45, 2.0, logM);
+            [
+                [5.8, 1.2, 5.2, 0, trunkH+0.6, 0],
+                [4.8, 1.2, 5.8, 1.0, trunkH+1.5, -0.6],
+                [5.2, 1.2, 4.2, -1.0, trunkH+1.8, 0.9],
+                [3.5, 1.0, 3.4, 0.0, trunkH+2.8, 0.1],
+            ].forEach(v => addLeafBlock(g, ...v, leafM));
+            [[-2.3, trunkH+0.2, 2.2], [2.4, trunkH+0.1, -2.0], [0.5, trunkH-0.2, -2.6]].forEach(([x,y,z]) => {
+                addLeafBlock(g, 0.5, 1.8, 0.5, x, y, z, leafM);
+            });
             return 6*B;
         };
 
@@ -431,8 +527,7 @@ const World = {
             else if (type === 2) crownW = makeSpruce(g, trunkH, mSpruceLog,mSpruceLeaf);
             else if (type === 3) crownW = makeJungle(g, trunkH, mJungleLog,mJungleLeaf);
             else {
-                // Cherry blossom: round crown like oak but PINK
-                crownW = makeOak(g, trunkH, mCherryLog, mCherryLeaf);
+                crownW = makeCherry(g, trunkH, mCherryLog, mCherryLeaf);
             }
 
             g.position.set(x, groundY, z);
@@ -920,6 +1015,12 @@ const World = {
     _createMountains() {
         // Minecraft-style blocky mountains: bright grey stone + white snow cap
         // Stone tiers: base=dark grey, mid=medium grey, top=light grey, snow=white
+        const stoneLow = this._texMat(this._mkStoneTex([96,96,102], [50,52,58], [142,142,150]));
+        const stoneMid = this._texMat(this._mkStoneTex([132,132,140], [70,72,78], [180,180,188]));
+        const stoneHigh = this._texMat(this._mkStoneTex([174,174,184], [96,98,106], [218,218,226]));
+        const snowMat = this._texMat(this._mkSnowTex(), { roughness: 0.72 });
+        const shadowStone = this._texMat(this._mkStoneTex([72,74,82], [36,38,44], [118,120,128]));
+
         const mountains = [
             // Big dramatic peaks with snow
             { x: -36, z:  42, height: 28, base: 17 }, // visible left skyline from spawn
@@ -947,13 +1048,11 @@ const World = {
                 const size = m.base * (1 - frac * 0.72);
 
                 // Colour: base=dark grey, upper=lighter, top=bright light grey, snow zone=white
-                let col;
-                if (frac > 0.72) col = 0xEEEEF4;          // bright snow grey
-                else if (frac > 0.55) col = 0xB8B8C8;     // light stone
-                else if (frac > 0.30) col = 0x909098;     // medium stone (MC stone)
-                else col = 0x727278;                       // dark base stone
-
-                const mat = new THREE.MeshStandardMaterial({ color: col });
+                let mat;
+                if (frac > 0.72) mat = snowMat;
+                else if (frac > 0.55) mat = stoneHigh;
+                else if (frac > 0.30) mat = stoneMid;
+                else mat = stoneLow;
 
                 // Each layer: slightly offset for jagged look
                 const jx = (Math.sin(i*2.3+m.x)*0.25);
@@ -966,8 +1065,7 @@ const World = {
             }
 
             // Snow cap (extra white block on peak)
-            const capMat = new THREE.MeshStandardMaterial({ color: 0xF5F5FF });
-            const cap = new THREE.Mesh(new THREE.BoxGeometry(m.base*0.22, layerH, m.base*0.22), capMat);
+            const cap = new THREE.Mesh(new THREE.BoxGeometry(m.base*0.22, layerH, m.base*0.22), snowMat);
             cap.position.y = LEVELS*layerH + layerH/2;
             cap.castShadow = true; g.add(cap);
 
@@ -979,21 +1077,34 @@ const World = {
             ].forEach(([ox, yf, oz, scale]) => {
                 const snow = new THREE.Mesh(
                     new THREE.BoxGeometry(m.base*scale, layerH*0.45, m.base*scale),
-                    capMat
+                    snowMat
                 );
                 snow.position.set(ox*m.base, yf*m.height, oz*m.base);
                 snow.castShadow = true; snow.receiveShadow = true;
                 g.add(snow);
             });
 
+            // Vertical ridges and ledges turn simple cubes into a mountain face.
+            for (let ri = 0; ri < 7; ri++) {
+                const a = (ri/7) * Math.PI * 2 + (m.x+m.z)*0.01;
+                const y = m.height * (0.18 + (ri % 4) * 0.13);
+                const h = m.height * (0.28 + (ri % 3) * 0.08);
+                const w = m.base * (0.12 + (ri % 2) * 0.04);
+                const d = m.base * 0.18;
+                const ridge = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), ri % 2 ? stoneMid : shadowStone);
+                ridge.position.set(Math.cos(a)*m.base*0.45, y, Math.sin(a)*m.base*0.45);
+                ridge.rotation.y = -a;
+                ridge.castShadow = true; ridge.receiveShadow = true;
+                g.add(ridge);
+            }
+
             // Exposed stone cliff faces on sides (darker blocks jutting out)
             for (let ci = 0; ci < 4; ci++) {
                 const a = (ci/4)*Math.PI*2;
                 const cr = m.base*0.3 + Math.random()*m.base*0.15;
                 const ch = m.height*0.2 + Math.random()*m.height*0.3;
-                const cliffMat = new THREE.MeshStandardMaterial({ color: 0x606068 });
                 const cliff = new THREE.Mesh(
-                    new THREE.BoxGeometry(cr*0.6, ch, cr*0.6), cliffMat
+                    new THREE.BoxGeometry(cr*0.6, ch, cr*0.6), shadowStone
                 );
                 cliff.position.set(Math.cos(a)*m.base*0.45, ch/2, Math.sin(a)*m.base*0.45);
                 cliff.castShadow = true; g.add(cliff);
@@ -1021,10 +1132,15 @@ const World = {
         const wallT = 0.4;
         const doorW = 3, doorH = 3;
 
-        const wallMat = new THREE.MeshStandardMaterial({ color: 0xc48a5c });
-        const floorMat = new THREE.MeshStandardMaterial({ color: 0x6b3a2a });
-        const roofMat = new THREE.MeshStandardMaterial({ color: 0xb44444, side: THREE.DoubleSide });
-        const winMat = new THREE.MeshStandardMaterial({ color: 0x87ceeb, transparent: true, opacity: 0.7 });
+        const wallMat = this._texMat(this._mkStoneTex([190,172,132], [132,108,76], [222,204,160]));
+        const floorMat = this._texMat(this._mkBarkTex([108,70,38], [54,34,20]));
+        const beamMat = this._texMat(this._mkBarkTex([94,58,30], [42,26,16]));
+        const roofMat = this._texMat(this._mkStoneTex([94,80,74], [46,38,36], [132,112,100]), { side: THREE.DoubleSide });
+        const winMat = new THREE.MeshStandardMaterial({
+            color: 0x9fdcff, transparent: true, opacity: 0.62,
+            emissive: 0x1d5a72, emissiveIntensity: 0.08
+        });
+        const lanternMat = new THREE.MeshStandardMaterial({ color: 0xffcf66, emissive: 0xff9a24, emissiveIntensity: 0.75 });
 
         const floor = new THREE.Mesh(new THREE.BoxGeometry(W, 0.2, D), floorMat);
         floor.position.y = 0.1;
@@ -1067,6 +1183,47 @@ const World = {
         roof.position.y = H + 0.25;
         roof.castShadow = true;
         g.add(roof);
+
+        // Layered shingle roof: darker, heavier silhouette than a toy flat slab.
+        [0, 1, 2].forEach(i => {
+            const r = new THREE.Mesh(new THREE.BoxGeometry(W + 2 - i*1.5, 0.35, D + 2 - i*1.2), roofMat);
+            r.position.y = H + 0.55 + i*0.32;
+            r.castShadow = true; r.receiveShadow = true;
+            g.add(r);
+        });
+
+        // Timber-frame beams and porch.
+        [
+            [-W/2-0.08, H/2, D/2+0.05, 0.28, H+0.3, 0.28],
+            [ W/2+0.08, H/2, D/2+0.05, 0.28, H+0.3, 0.28],
+            [-W/2-0.08, H/2, -D/2-0.05, 0.28, H+0.3, 0.28],
+            [ W/2+0.08, H/2, -D/2-0.05, 0.28, H+0.3, 0.28],
+            [0, H+0.05, D/2+0.1, W+0.7, 0.25, 0.25],
+            [0, 1.6, D/2+0.12, W+0.4, 0.22, 0.22],
+            [-2.6, 2.3, D/2+0.15, 0.22, 2.2, 0.22],
+            [ 2.6, 2.3, D/2+0.15, 0.22, 2.2, 0.22],
+        ].forEach(([x,y,z,w,h,d]) => {
+            const beam = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), beamMat);
+            beam.position.set(x,y,z); beam.castShadow = true; beam.receiveShadow = true; g.add(beam);
+        });
+
+        const porch = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.35, 2.2), floorMat);
+        porch.position.set(0, 0.35, D/2 + 1.05);
+        porch.castShadow = true; porch.receiveShadow = true; g.add(porch);
+        [-3.1, 3.1].forEach(xo => {
+            const post = new THREE.Mesh(new THREE.BoxGeometry(0.28, 3.2, 0.28), beamMat);
+            post.position.set(xo, 1.9, D/2 + 1.7);
+            post.castShadow = true; g.add(post);
+            const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.34, 0.34), lanternMat);
+            lamp.position.set(xo, 3.55, D/2 + 1.7);
+            g.add(lamp);
+            const light = new THREE.PointLight(0xffb45a, 0.7, 7);
+            light.position.copy(lamp.position); g.add(light);
+        });
+
+        const chimney = new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.4, 1.0), this._texMat(this._mkStoneTex([112,96,86], [58,48,44], [154,136,122])));
+        chimney.position.set(W/2 - 2, H + 1.8, -D/2 + 1.6);
+        chimney.castShadow = true; g.add(chimney);
 
         const winSize = 1.2;
         const winL = new THREE.Mesh(new THREE.BoxGeometry(0.1, winSize, winSize), winMat);
@@ -1438,11 +1595,20 @@ const World = {
             color: 0x3FC8E8, transparent: true, opacity: 0.75,
             emissive: 0x1A6888, emissiveIntensity: 0.2
         });
+        const foamMat = new THREE.MeshStandardMaterial({
+            color: 0xEAFBFF, transparent: true, opacity: 0.62,
+            emissive: 0x8deeff, emissiveIntensity: 0.12
+        });
         for (let i = 0; i < 12; i++) {
             const wy = CLIFF_H - i * 2.15;
             const wf = new THREE.Mesh(new THREE.BoxGeometry(2.6 + Math.sin(i)*0.5, 2.5, 1.2), wfMat);
             wf.position.set(cx + Math.sin(i * 0.8) * 0.55, wy, cz - 13.0 - i * 0.12);
             GAME.scene.add(wf);
+            if (i % 3 === 1) {
+                const foam = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.18, 1.35), foamMat);
+                foam.position.set(wf.position.x, wy - 1.1, wf.position.z - 0.08);
+                GAME.scene.add(foam);
+            }
             if (!this._waterfallSegs) this._waterfallSegs = [];
             this._waterfallSegs.push(wf);
         }
@@ -1453,6 +1619,12 @@ const World = {
         const splash = new THREE.Mesh(new THREE.BoxGeometry(8, 0.4, 7), splashMat);
         splash.position.set(cx, 0.2, cz - 15.5);
         GAME.scene.add(splash);
+        [[0,0],[-2.2,1.1],[2.1,-0.8],[1.4,1.9],[-1.6,-1.8]].forEach(([ox,oz], i) => {
+            const foam = new THREE.Mesh(new THREE.BoxGeometry(1.8 - i*0.12, 0.08, 0.45), foamMat);
+            foam.position.set(cx+ox, 0.46, cz-15.5+oz);
+            foam.rotation.y = i * 0.7;
+            GAME.scene.add(foam);
+        });
         this.waterZones.push({ cx, cz: cz-15.5, halfW: 4.5, halfD: 3.5 });
 
         // ── Stone staircase up the south face ─────────────────────────
@@ -1474,15 +1646,17 @@ const World = {
         const g = new THREE.Group();
         const W = 22, H = 12, D = 18, wallT = 0.6;
         const doorW = 4.5, doorH = 7;
-        const goldMat   = new THREE.MeshStandardMaterial({ color: 0xffd700, emissive: 0x443300, emissiveIntensity: 0.2 });
-        const pinkRoof  = new THREE.MeshStandardMaterial({ color: 0xff69b4 });
-        const blueRoof  = new THREE.MeshStandardMaterial({ color: 0x4488ff });
-        const purpRoof  = new THREE.MeshStandardMaterial({ color: 0x8844cc });
-        const redMat    = new THREE.MeshStandardMaterial({ color: 0xcc2222 });
+        const goldMat   = new THREE.MeshStandardMaterial({ color: 0xd6aa38, emissive: 0x332200, emissiveIntensity: 0.16, roughness: 0.55 });
+        const pinkRoof  = this._texMat(this._mkStoneTex([118,74,88], [58,36,48], [162,104,122]));
+        const blueRoof  = this._texMat(this._mkStoneTex([54,76,100], [28,38,54], [96,124,152]));
+        const purpRoof  = this._texMat(this._mkStoneTex([82,68,102], [42,34,58], [122,104,150]));
+        const redMat    = this._texMat(this._mkStoneTex([128,40,34], [64,24,22], [178,72,58]));
         const winMat    = new THREE.MeshStandardMaterial({ color: 0x88ccff, transparent: true, opacity: 0.6 });
-        const floorMat  = new THREE.MeshStandardMaterial({ color: 0xd4c8a0 });
+        const floorMat  = this._texMat(this._mkBarkTex([150,116,72], [72,48,28]));
         const torchMat  = new THREE.MeshStandardMaterial({ color: 0xffcc44, emissive: 0xff8800, emissiveIntensity: 0.9 });
-        const wallMat   = new THREE.MeshStandardMaterial({ color: 0xF5EED8 }); // cream
+        const wallMat   = this._texMat(this._mkStoneTex([190,184,166], [116,110,100], [232,226,204]));
+        const trimMat   = this._texMat(this._mkStoneTex([112,112,118], [58,60,66], [158,158,166]));
+        const woodTrim  = this._texMat(this._mkBarkTex([92,58,32], [42,26,16]));
 
         const addTorch = (x, y, z) => {
             const torch = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.5,0.2),
@@ -1513,6 +1687,28 @@ const World = {
         const fTop = new THREE.Mesh(new THREE.BoxGeometry(doorW,H-doorH,wallT), wallMat);
         fTop.position.set(0,doorH+(H-doorH)/2,D/2-wallT/2); fTop.castShadow=true; g.add(fTop);
 
+        // Stone trims, front arch, and buttresses make the castle read less toy-like.
+        [
+            [0, H+0.15, D/2, W+1.2, 0.35, 0.55],
+            [0, H+0.15, -D/2, W+1.2, 0.35, 0.55],
+            [-W/2, H/2, D/2+0.15, 0.55, H+0.2, 0.8],
+            [ W/2, H/2, D/2+0.15, 0.55, H+0.2, 0.8],
+            [-doorW/2-0.45, doorH/2, D/2+0.18, 0.55, doorH, 0.7],
+            [ doorW/2+0.45, doorH/2, D/2+0.18, 0.55, doorH, 0.7],
+            [0, doorH+0.25, D/2+0.18, doorW+1.4, 0.55, 0.7],
+        ].forEach(([x,y,z,w,h,d]) => {
+            const t = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), trimMat);
+            t.position.set(x,y,z); t.castShadow = true; t.receiveShadow = true; g.add(t);
+        });
+
+        [-7.5, 7.5].forEach(xo => {
+            for (let i = 0; i < 3; i++) {
+                const butt = new THREE.Mesh(new THREE.BoxGeometry(1.1, 3.3 + i*0.5, 1.2), trimMat);
+                butt.position.set(xo, 1.65 + i*2.3, D/2 + 0.55 - i*0.18);
+                butt.castShadow = true; butt.receiveShadow = true; g.add(butt);
+            }
+        });
+
         // Stained glass windows
         const wColors=[0xff69b4,0xffd700,0x88ccff,0xff69b4];
         [-D/3,D/3].forEach(zo => {
@@ -1523,6 +1719,14 @@ const World = {
                     wp.position.set(xp,H*0.55-0.6,zo+i*0.5-0.75); g.add(wp);
                 });
             });
+        });
+        [-6, 0, 6].forEach(xo => {
+            const narrow = new THREE.Mesh(new THREE.BoxGeometry(0.55, 2.6, 0.12), winMat);
+            narrow.position.set(xo, H*0.58, D/2 + 0.08);
+            g.add(narrow);
+            const sill = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.18, 0.35), trimMat);
+            sill.position.set(xo, H*0.58-1.45, D/2+0.12);
+            g.add(sill);
         });
 
         // 4 corner towers
@@ -1553,6 +1757,18 @@ const World = {
         [W+1,W-2,W-5].forEach((s,i)=>{
             const rl=new THREE.Mesh(new THREE.BoxGeometry(s,1.2,D+1-i*1.5),blueRoof);
             rl.position.set(0,H+0.6+i*1.2,0); rl.castShadow=true; g.add(rl);
+        });
+
+        // Timber galleries under the roof, inspired by cliff houses.
+        [-1, 1].forEach(side => {
+            const gallery = new THREE.Mesh(new THREE.BoxGeometry(W-3, 0.28, 0.5), woodTrim);
+            gallery.position.set(0, H-1.2, side*(D/2+0.42));
+            gallery.castShadow = true; g.add(gallery);
+            for (let i = -4; i <= 4; i += 2) {
+                const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.4, 0.22), woodTrim);
+                post.position.set(i, H-2.2, side*(D/2+0.45));
+                post.castShadow = true; g.add(post);
+            }
         });
 
         // Banners

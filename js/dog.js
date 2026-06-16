@@ -159,7 +159,7 @@ const Dog = {
         this._buildWing('L', P, wingY, wingB, 1);
         this._buildWing('R', P, wingY, wingB, -1);
 
-        g.position.set(0, 5 * PX, 0); // 5*0.32 = 1.6 = groundOffset
+        g.position.set(0, 5 * P, 0); // 5*0.32 = 1.6 = groundOffset
         GAME.scene.add(g);
     },
 
