@@ -362,6 +362,7 @@ const World = {
         this._addWaterfall();
         this._addGlowingMushrooms();
         this._addMCGrass();
+        this._createPremiumWorldPass();
     },
 
     _createTrees() {
@@ -2662,6 +2663,133 @@ const World = {
             bush.position.set(x, gy+bh/2, z);
             GAME.scene.add(bush);
         }
+    },
+
+    _createPremiumWorldPass() {
+        // Art-direction pass:
+        // Ref 1 = big cinematic landforms. Ref 2 = polished local voxel detail.
+        const stoneA = this._texMat(this._mkStoneTex([86,92,92], [38,44,48], [136,142,142]));
+        const stoneB = this._texMat(this._mkStoneTex([112,118,112], [54,62,58], [164,174,160]));
+        const foliageOpts = { transparent: true, alphaTest: 0.30, side: THREE.DoubleSide };
+        const moss = this._texMat(this._mkLeafTex([68,126,44], [126,202,72], [32,74,30], 7), foliageOpts);
+        const grassTop = this._texMat(this._mkLeafTex([80,158,48], [160,230,78], [34,88,30], 8), foliageOpts);
+        const dirt = this._texMat(this._mkStoneTex([126,88,54], [72,48,30], [166,118,76]));
+        const snow = this._texMat(this._mkSnowTex());
+        const bark = this._texMat(this._mkBarkTex([116,78,42], [48,30,18]));
+        const plank = this._texMat(this._mkBarkTex([168,122,66], [82,52,28]));
+        const lantern = new THREE.MeshStandardMaterial({
+            color: 0xffcc66, emissive: 0xff9a2a, emissiveIntensity: 0.75, roughness: 0.45
+        });
+        const water = new THREE.MeshPhysicalMaterial({
+            color: 0x42bde8, transparent: true, opacity: 0.58,
+            roughness: 0.03, metalness: 0.04, transmission: 0.22,
+            thickness: 0.35, depthWrite: false,
+            emissive: 0x0f5c88, emissiveIntensity: 0.08
+        });
+
+        const add = (x, y, z, w, h, d, mat, solid=false) => {
+            const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+            mesh.position.set(x, y + h/2, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            GAME.scene.add(mesh);
+            if (solid) {
+                this.collidables.push({ box: new THREE.Box3(
+                    new THREE.Vector3(x-w/2, y, z-d/2),
+                    new THREE.Vector3(x+w/2, y+h, z+d/2)
+                )});
+            }
+            return mesh;
+        };
+
+        const addLantern = (x, z, h=2.2) => {
+            const gy = this.getTerrainY(x, z);
+            add(x, gy, z, 0.32, h, 0.32, bark);
+            add(x, gy+h, z, 0.62, 0.42, 0.62, lantern);
+            const light = new THREE.PointLight(0xffb45a, 0.65, 8);
+            light.position.set(x, gy+h+0.25, z);
+            GAME.scene.add(light);
+        };
+
+        const addRockCluster = (cx, cz, scale=1) => {
+            const gy = this.getTerrainY(cx, cz);
+            [
+                [0,0,0, 2.4,1.4,2.1, stoneA],
+                [1.6,0.5,-0.5, 1.6,1.9,1.4, stoneB],
+                [-1.5,0.2,0.8, 1.5,1.2,1.8, stoneA],
+                [0.4,1.25,0.3, 1.3,0.6,1.2, moss],
+            ].forEach(([x,y,z,w,h,d,m]) => add(cx+x*scale, gy+y*scale, cz+z*scale, w*scale, h*scale, d*scale, m));
+        };
+
+        // Ref 1: distant cinematic mountain walls outside the playable grid.
+        [
+            [-92, 48, 34, 8, 0],
+            [-76, 70, 42, 9, 1],
+            [ 88, 52, 36, 8, 1],
+            [ 76, 78, 46, 10, 0],
+            [-38, 96, 52, 11, 1],
+            [ 42, 100, 48, 10, 0],
+        ].forEach(([x,z,h,levels, snowy]) => {
+            for (let i = 0; i < levels; i++) {
+                const frac = i / levels;
+                const w = (24 - i*1.8) * (1 + (Math.sin(x+z+i)*0.08));
+                const d = (19 - i*1.4);
+                const layerH = h / levels;
+                const mat = snowy && frac > 0.66 ? snow : (frac > 0.42 ? stoneB : stoneA);
+                add(x + Math.sin(i*1.7)*1.2, i*layerH, z + Math.cos(i*1.1)*0.9, w, layerH+0.08, d, mat);
+            }
+        });
+
+        // Ref 1 + 2 hybrid: central stepped valley and viewpoint terraces.
+        [
+            [-18, 32, 16, 0.25, 20, grassTop],
+            [-18, 35, 12, 0.35, 16, moss],
+            [ 18, 30, 18, 0.25, 22, grassTop],
+            [ 20, 34, 14, 0.35, 18, moss],
+            [  0, 44, 18, 0.22, 9, dirt],
+        ].forEach(([x,z,w,h,d,m]) => {
+            const gy = this.getTerrainY(x, z);
+            add(x, gy+0.02, z, w, h, d, m);
+        });
+
+        // Ref 2: premium water edge - stepping stones, reeds, foam, and clean shore rhythm.
+        for (let i = 0; i < 12; i++) {
+            const t = i / 11;
+            const x = -7 + Math.sin(i*0.9) * 1.4;
+            const z = 25 + t * 30;
+            add(x, 0.14, z, 4.4 - t*1.2, 0.12, 1.7, water);
+            if (i % 2 === 0) add(x-3.2, 0.08, z+0.4, 1.2, 0.22, 1.0, stoneB);
+            if (i % 3 === 1) add(x+3.0, 0.08, z-0.2, 1.4, 0.18, 0.9, moss);
+        }
+
+        // Ref 2: path composition - block slabs, side stones, lanterns.
+        [
+            [0, 8], [0, 15], [-1, 23], [-3, 31], [-4, 40], [-2, 50], [0, 60]
+        ].forEach(([x,z], i) => {
+            const gy = this.getTerrainY(x, z);
+            add(x, gy+0.03, z, 2.6 + (i%2)*0.6, 0.12, 2.2, i%2 ? dirt : plank);
+            if (i % 2 === 0) addRockCluster(x + 3.8, z + 0.7, 0.45);
+            if (i === 2 || i === 5) addLantern(x - 3.4, z, 1.9);
+        });
+
+        // Ref 2 hero micro-landmark: old voxel tree near the route, with broad roots.
+        const tx = -14, tz = 43, ty = this.getTerrainY(tx, tz);
+        add(tx, ty, tz, 2.2, 10.5, 2.2, bark, true);
+        [[-2.3,0.1,0,4.4,0.55,0.7],[2.1,0.15,0.4,4.0,0.5,0.65],[0.2,0.1,-2.1,0.7,0.52,4.2]].forEach(
+            ([x,y,z,w,h,d]) => add(tx+x, ty+y, tz+z, w,h,d,bark)
+        );
+        [
+            [0,10.2,0, 8.2,2.0,7.4],
+            [1.8,12.0,-0.8, 6.4,1.8,6.8],
+            [-2.0,11.8,1.2, 6.0,1.8,5.8],
+            [0.4,13.6,0.4, 4.4,1.6,4.2],
+        ].forEach(([x,y,z,w,h,d]) => add(tx+x, ty+y, tz+z, w,h,d, grassTop));
+
+        // Ref 2: local scenic clusters around water, buildings, and castle base.
+        [[-8,18,0.7], [17,20,0.8], [-22,27,0.6], [13,49,0.75], [-10,62,0.9], [9,62,0.65]].forEach(
+            ([x,z,s]) => addRockCluster(x,z,s)
+        );
+        [[-11,13],[-7,14],[18,16],[21,18],[-18,35],[-16,38],[13,38],[16,41]].forEach(([x,z]) => addLantern(x,z,1.6));
     },
 
     update(dt) {
